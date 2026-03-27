@@ -1,0 +1,13 @@
+# IDE/Editor local settings
+.claude/
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+*.local
+._*
+
+# Logs
+logs/
+*.log
