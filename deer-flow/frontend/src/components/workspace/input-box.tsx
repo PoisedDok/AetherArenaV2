@@ -458,7 +458,7 @@ export function InputBox({
     <div ref={promptRootRef} className="relative">
       <PromptInput
         className={cn(
-          "bg-background/85 rounded-2xl backdrop-blur-sm transition-all duration-300 ease-out *:data-[slot='input-group']:rounded-2xl",
+          "glass-chat-input rounded-2xl transition-all duration-300 ease-out *:data-[slot='input-group']:rounded-2xl",
           className,
         )}
         disabled={disabled}
@@ -847,7 +847,7 @@ export function InputBox({
           <div className="absolute right-0 -top-20 left-0 z-20 flex items-center justify-center">
             <div className="flex items-center gap-2">
               {followupsLoading ? (
-                <div className="text-muted-foreground bg-background/80 rounded-full border px-4 py-2 text-xs backdrop-blur-sm">
+                <div className="glass-chip text-muted-foreground rounded-full border px-4 py-2 text-xs">
                   {t.inputBox.followupLoading}
                 </div>
               ) : (

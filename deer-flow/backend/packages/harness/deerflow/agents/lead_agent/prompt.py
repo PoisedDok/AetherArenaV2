@@ -149,7 +149,7 @@ bash("npm test")  # Direct execution, not task()
 
 SYSTEM_PROMPT_TEMPLATE = """
 <role>
-You are {agent_name}, an open-source super agent.
+You are {agent_name}, a personal agent — local, private, and fully under the user's control.
 </role>
 
 {soul}
@@ -478,7 +478,7 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
 
     # Format the prompt with dynamic skills and memory
     prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        agent_name=agent_name or "DeerFlow 2.0",
+        agent_name=agent_name or "Cohere",
         soul=get_agent_soul(agent_name),
         skills_section=skills_section,
         deferred_tools_section=deferred_tools_section,

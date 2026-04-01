@@ -282,6 +282,16 @@ export interface Translations {
       displayNameTitle: string;
       displayNameDescription: string;
       displayNamePlaceholder: string;
+      glassTitle: string;
+      glassDescription: string;
+      glassSubtle: string;
+      glassSubtleDescription: string;
+      glassMedium: string;
+      glassMediumDescription: string;
+      glassFrosted: string;
+      glassFrostedDescription: string;
+      glassNone: string;
+      glassNoneDescription: string;
     };
     tools: {
       title: string;

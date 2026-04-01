@@ -14,7 +14,10 @@ from deerflow.sandbox.exceptions import (
 from deerflow.sandbox.sandbox import Sandbox
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 
-_ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])/(?:[^\s\"'`;&|<>()]+)")
+# Matches absolute paths but excludes:
+# - URLs (e.g., https://... where / is preceded by : or another /)
+# - Path continuations (e.g., /foo/bar where /bar is preceded by word char)
+_ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:/\w])/(?:[^\s\"'`;&|<>()]+)")
 _LOCAL_BASH_SYSTEM_PATH_PREFIXES = (
     "/bin/",
     "/usr/bin/",

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none';">
+  <title>AetherArena</title>
+  <link rel="stylesheet" href="./splash.css">
+</head>
+<body>
+  <script src="./splash-boot.js"></script>
+  <div class="aether-startup-splash" role="presentation" aria-hidden="true">
+    <div class="aether-startup-splash__inner">
+      <div class="aether-startup-splash__mark">
+        <div class="aether-startup-splash__wordmark">
+          <span class="aether-startup-splash__letter aether-startup-splash__letter--a">A</span>
+          <span class="aether-startup-splash__suffix aether-startup-splash__suffix--ether">ether</span>
+          <!--
+            Second-word slot: holds "Inc" and "Arena" stacked in the same grid cell.
+            "Inc" builds up during the initial phases, then rolls upward.
+            "Arena" waits below and rolls up into place.
+          -->
+          <span class="aether-startup-splash__second-word">
+            <span class="aether-startup-splash__inc-inner">
+              <span class="aether-startup-splash__letter aether-startup-splash__letter--i">I</span>
+              <span class="aether-startup-splash__suffix aether-startup-splash__suffix--inc">nc</span>
+            </span>
+            <span class="aether-startup-splash__arena-word">Arena</span>
+          </span>
+        </div>
+      </div>
+      <div class="aether-startup-splash__status"></div>
+      <div class="aether-startup-splash__progress-wrap">
+        <div class="aether-startup-splash__progress-bar"></div>
+      </div>
+    </div>
+  </div>
+  <script src="./splash.js"></script>
+</body>
+</html>

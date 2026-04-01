@@ -13,7 +13,8 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     reasoning_effort: undefined,
   },
   layout: {
-    sidebar_collapsed: false,
+    sidebar_collapsed: true,
+    glass_preset: "subtle",
   },
   behavior: {
     auto_followup: true,
@@ -41,6 +42,7 @@ export interface LocalSettings {
   };
   layout: {
     sidebar_collapsed: boolean;
+    glass_preset: "subtle" | "medium" | "frosted" | "none";
   };
   behavior: {
     auto_followup: boolean;

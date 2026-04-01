@@ -3,48 +3,121 @@
  *
  * Loads the web UI from localhost:2026. Does not embed the Python backend.
  *
+ * Window chrome matches AetherArena main windows: transparent + macOS vibrancy /
+ * Windows background material so system glass shows through (not CSS-only fake).
+ *
  * MIT License
  */
 
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
 const path = require('path');
 
 const DEERFLOW_URL = 'http://localhost:2026';
 const HEALTH_CHECK_URL = 'http://localhost:2026/health';
-const POLL_INTERVAL = 2000;
+
+/** Set DEERFLOW_DISABLE_NATIVE_WINDOW_EFFECTS=1 to use opaque window + CSS splash only. */
+const ENABLE_NATIVE_WINDOW_EFFECTS = process.env.DEERFLOW_DISABLE_NATIVE_WINDOW_EFFECTS !== '1';
 
 let mainWindow = null;
-let backendCheckInterval = null;
+
+function registerIpcHandlers() {
+  ipcMain.handle('deerflow:backend-health', async () => checkBackendHealth());
+
+  ipcMain.handle('deerflow:load-main-app', async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    await mainWindow.loadURL(DEERFLOW_URL);
+  });
+
+  ipcMain.handle('deerflow:quit-app', () => {
+    app.quit();
+  });
+}
+
+/**
+ * BrowserWindow options aligned with AetherArena MainWindow / ChatWindow / ArtifactsWindow.
+ */
+function buildWindowOptions() {
+  const base = {
+    width: 780,
+    height: 860,
+    minWidth: 600,
+    minHeight: 560,
+    title: 'AetherArena v2',
+    titleBarStyle: 'default',
+    /** Windows 11 / macOS — native rounded window shape (not a sharp rectangle). */
+    roundedCorners: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+    },
+  };
+
+  if (ENABLE_NATIVE_WINDOW_EFFECTS && process.platform === 'darwin') {
+    return {
+      ...base,
+      transparent: true,
+      backgroundColor: '#00000000',
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      /**
+       * Frameless + vibrancy/rounded shell — must keep native traffic lights.
+       * `hiddenInset` draws close/minimize/zoom over the content (same window for splash + main URL).
+       * Do not use plain `frame: false` without this or traffic lights disappear.
+       */
+      frame: false,
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 14, y: 12 },
+    };
+  }
+
+  if (ENABLE_NATIVE_WINDOW_EFFECTS && process.platform === 'win32') {
+    return {
+      ...base,
+      transparent: true,
+      backgroundColor: '#00000000',
+    };
+  }
+
+  return {
+    ...base,
+    transparent: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#f5f5f7',
+  };
+}
 
 /**
  * Create the main application window
  */
 function createWindow() {
-  const windowOptions = {
-    width: 1400,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    title: 'AetherArena v2',
-    // Use default title bar to avoid overlap with window controls
-    titleBarStyle: 'default',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true
-    }
-  };
+  const windowOptions = buildWindowOptions();
 
   mainWindow = new BrowserWindow(windowOptions);
 
-  // Handle external links in system browser
+  if (ENABLE_NATIVE_WINDOW_EFFECTS && process.platform === 'win32') {
+    try {
+      if (typeof mainWindow.setBackgroundMaterial === 'function') {
+        mainWindow.setBackgroundMaterial('acrylic');
+      }
+    } catch {
+      /* Electron / OS version may not support */
+    }
+  }
+
+  if (windowOptions.transparent) {
+    try {
+      mainWindow.setBackgroundColor('#00000000');
+    } catch {
+      /* ignore */
+    }
+  }
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // Handle navigation within the app
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost:')) {
       event.preventDefault();
@@ -52,13 +125,10 @@ function createWindow() {
     }
   });
 
-  // Check backend and load
-  loadDeerFlow();
+  mainWindow.loadFile(path.join(__dirname, 'splash.html'));
 
-  // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null;
-    stopBackendPolling();
   });
 }
 
@@ -68,10 +138,11 @@ function createWindow() {
 async function checkBackendHealth() {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch(HEALTH_CHECK_URL, { 
-      signal: controller.signal
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(HEALTH_CHECK_URL, {
+      signal: controller.signal,
+      cache: 'no-store',
     });
     clearTimeout(timeout);
     return response.ok;
@@ -80,139 +151,17 @@ async function checkBackendHealth() {
   }
 }
 
-/**
- * Load web UI or show waiting screen
- */
-async function loadDeerFlow() {
-  const isReady = await checkBackendHealth();
-  
-  if (isReady && mainWindow) {
-    stopBackendPolling();
-    mainWindow.loadURL(DEERFLOW_URL);
-  } else if (mainWindow) {
-    showWaitingScreen();
-    startBackendPolling();
-  }
-}
-
-/**
- * Show waiting screen for backend
- */
-function showWaitingScreen() {
-  if (!mainWindow) return;
-  
-  const waitingHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100vh;
-          background: #0a0a0a;
-          color: #e5e5e5;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          text-align: center;
-          padding: 20px;
-        }
-        .spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #262626;
-          border-top-color: #3b82f6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin-bottom: 20px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        h1 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
-        p { color: #737373; font-size: 14px; line-height: 1.5; max-width: 400px; }
-        code {
-          background: #262626;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-family: 'Menlo', 'Monaco', monospace;
-          font-size: 12px;
-          color: #e5e5e5;
-        }
-        .button {
-          margin-top: 20px;
-          padding: 10px 20px;
-          background: #262626;
-          border: 1px solid #404040;
-          border-radius: 6px;
-          color: #e5e5e5;
-          font-size: 13px;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        .button:hover { background: #333; }
-      </style>
-    </head>
-    <body>
-      <div class="spinner"></div>
-      <h1>Waiting for AetherArena v2 backend...</h1>
-      <p>Please start the backend first:</p>
-      <p style="margin-top: 12px;"><code>make docker-start</code></p>
-      <button class="button" onclick="checkAgain()">Check Again</button>
-      <script>
-        function checkAgain() {
-          location.reload();
-        }
-        // Auto-check every 3 seconds
-        setTimeout(() => location.reload(), 3000);
-      </script>
-    </body>
-    </html>
-  `;
-  
-  const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(waitingHtml);
-  mainWindow.loadURL(dataUrl);
-}
-
-/**
- * Start polling for backend availability
- */
-function startBackendPolling() {
-  stopBackendPolling();
-  backendCheckInterval = setInterval(async () => {
-    if (!mainWindow) {
-      stopBackendPolling();
-      return;
-    }
-    const isReady = await checkBackendHealth();
-    if (isReady) {
-      loadDeerFlow();
-    }
-  }, POLL_INTERVAL);
-}
-
-/**
- * Stop backend polling
- */
-function stopBackendPolling() {
-  if (backendCheckInterval) {
-    clearInterval(backendCheckInterval);
-    backendCheckInterval = null;
-  }
-}
-
 // ============================================================================
 // Electron Lifecycle
 // ============================================================================
 
+registerIpcHandlers();
+
 app.whenReady().then(() => {
-  // Small delay to ensure app is fully ready
   setTimeout(createWindow, 100);
 });
 
 app.on('window-all-closed', () => {
-  stopBackendPolling();
   app.quit();
 });
 
@@ -222,11 +171,6 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', () => {
-  stopBackendPolling();
-});
-
-// Prevent new window creation
 app.on('web-contents-created', (_, contents) => {
   contents.on('new-window', (event) => {
     event.preventDefault();

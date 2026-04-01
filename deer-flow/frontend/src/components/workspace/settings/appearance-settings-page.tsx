@@ -8,10 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/core/i18n/hooks";
-import { useLocalSettings } from "@/core/settings";
+import { type LocalSettings, useLocalSettings } from "@/core/settings";
 import { cn } from "@/lib/utils";
 
 import { SettingsSection } from "./settings-section";
+
+type GlassPreset = LocalSettings["layout"]["glass_preset"];
 
 function useDebouncedCallback<T extends (arg: string) => void>(fn: T, delay: number) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +140,54 @@ export function AppearanceSettingsPage() {
       <Separator />
 
       <SettingsSection
+        title={t.settings.appearance.glassTitle}
+        description={t.settings.appearance.glassDescription}
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {(
+            [
+              {
+                id: "subtle" as GlassPreset,
+                label: t.settings.appearance.glassSubtle,
+                description: t.settings.appearance.glassSubtleDescription,
+                blurPx: 10,
+              },
+              {
+                id: "medium" as GlassPreset,
+                label: t.settings.appearance.glassMedium,
+                description: t.settings.appearance.glassMediumDescription,
+                blurPx: 28,
+              },
+              {
+                id: "frosted" as GlassPreset,
+                label: t.settings.appearance.glassFrosted,
+                description: t.settings.appearance.glassFrostedDescription,
+                blurPx: 64,
+              },
+              {
+                id: "none" as GlassPreset,
+                label: t.settings.appearance.glassNone,
+                description: t.settings.appearance.glassNoneDescription,
+                blurPx: 0,
+              },
+            ] as const
+          ).map((preset) => (
+            <GlassPresetCard
+              key={preset.id}
+              id={preset.id}
+              label={preset.label}
+              description={preset.description}
+              blurPx={preset.blurPx}
+              active={localSettings.layout.glass_preset === preset.id}
+              onSelect={(v) => setLocalSettings("layout", { glass_preset: v })}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      <Separator />
+
+      <SettingsSection
         title={t.settings.appearance.autoFollowupTitle}
         description={t.settings.appearance.autoFollowupDescription}
       >
@@ -249,6 +299,61 @@ function ThemePreviewCard({
             </div>
           </div>
         </div>
+      </div>
+    </button>
+  );
+}
+
+function GlassPresetCard({
+  id,
+  label,
+  description,
+  blurPx,
+  active,
+  onSelect,
+}: {
+  id: GlassPreset;
+  label: string;
+  description: string;
+  blurPx: number;
+  active: boolean;
+  onSelect: (id: GlassPreset) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      className={cn(
+        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all",
+        active
+          ? "border-primary ring-primary/30 shadow-sm ring-2"
+          : "hover:border-border hover:shadow-sm",
+      )}
+    >
+      <div className="space-y-1">
+        <div className="text-sm leading-none font-semibold">{label}</div>
+        <p className="text-muted-foreground text-xs leading-snug">{description}</p>
+      </div>
+      {/* Visual preview: background bars + glass panel overlay */}
+      <div className="relative h-14 w-full overflow-hidden rounded-md border bg-neutral-900">
+        <div className="absolute inset-0 flex flex-col justify-center gap-1 px-2 py-2">
+          <div className="h-1.5 w-4/5 rounded-full bg-white/10" />
+          <div className="h-1.5 w-3/5 rounded-full bg-white/[0.08]" />
+          <div className="h-1.5 w-2/5 rounded-full bg-white/[0.06]" />
+        </div>
+        {blurPx > 0 ? (
+          <div
+            className="absolute inset-x-2 bottom-2 top-3 rounded-md border border-white/10"
+            style={{
+              background: `rgba(255,255,255,${0.03 + blurPx * 0.0012})`,
+              backdropFilter: `blur(${Math.round(blurPx * 0.22)}px) saturate(150%)`,
+              WebkitBackdropFilter: `blur(${Math.round(blurPx * 0.22)}px) saturate(150%)`,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+            }}
+          />
+        ) : (
+          <div className="absolute inset-x-2 bottom-2 top-3 rounded-md border border-white/10 bg-neutral-800" />
+        )}
       </div>
     </button>
   );

@@ -222,6 +222,185 @@
   }
 }
 
+/* ── Electron macOS traffic-light safe area ───────────────────────────────
+ * Set on <html> by workspace/layout.tsx when running inside Electron on darwin.
+ * Traffic lights: x=14, ~68px wide → 88px clears them with a comfortable gap.
+ * Drag region: headers tagged .app-drag become the window drag handle;
+ * interactive children must be tagged .app-no-drag to stay clickable.
+ * ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --traffic-light-inset: 0px;
+  --traffic-light-top: 0px;
+}
+
+html.electron-darwin {
+  /* Horizontal: clear ~68px wide traffic lights + gap */
+  --traffic-light-inset: 88px;
+  /* Vertical: traffic lights at y=12, ~14px tall → 38px clears them with margin */
+  --traffic-light-top: 38px;
+}
+
+html.electron-darwin .app-drag {
+  -webkit-app-region: drag;
+}
+
+html.electron-darwin .app-drag button,
+html.electron-darwin .app-drag a,
+html.electron-darwin .app-drag [role="button"],
+html.electron-darwin .app-drag input,
+html.electron-darwin .app-drag select,
+html.electron-darwin .app-drag textarea {
+  -webkit-app-region: no-drag;
+}
+
+/* ── Glass design system ──────────────────────────────────────────────────
+ * A `glass-{preset}` class on <html> (set by layout.tsx from user settings)
+ * drives CSS custom properties consumed by component rules below.
+ * Presets: glass-subtle | glass-medium | glass-frosted | glass-none
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* Depth gradient — gives backdrop-filter something to blur over in dark mode */
+html.dark:not(.glass-none) body {
+  background-image:
+    radial-gradient(ellipse 70% 55% at 12% 12%, rgba(0, 122, 255, 0.07) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 70% at 88% 88%, rgba(120, 60, 220, 0.05) 0%, transparent 65%);
+  background-attachment: fixed;
+}
+
+/* Base glass variables — light mode defaults */
+:root {
+  --glass-blur: 14px;
+  --glass-saturate: 160%;
+  --glass-surface: rgba(255, 255, 255, 0.60);
+  --glass-sidebar: rgba(255, 255, 255, 0.50);
+  /* Input uses a more opaque surface for readability */
+  --glass-input:   rgba(255, 255, 255, 0.72);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.07);
+  /* Fallback solid surface (mirrors bg-background/85) */
+  --background-surface: color-mix(in oklch, oklch(0.9855 0.0098 87.47) 85%, transparent);
+}
+
+/* Dark mode overrides */
+html.dark {
+  --glass-surface: rgba(255, 255, 255, 0.06);
+  --glass-sidebar: rgba(255, 255, 255, 0.04);
+  --glass-input:   rgba(255, 255, 255, 0.10);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --background-surface: color-mix(in oklch, oklch(0.24 0.0036 106.64) 85%, transparent);
+}
+
+/* — Subtle ---------------------------------------------------------------- */
+html.glass-subtle                { --glass-blur: 10px;  --glass-saturate: 148%; }
+html.glass-subtle:not(.dark)     { --glass-surface: rgba(255,255,255,0.52); --glass-sidebar: rgba(255,255,255,0.42); --glass-input: rgba(255,255,255,0.72); }
+html.glass-subtle.dark           { --glass-surface: rgba(255,255,255,0.05); --glass-sidebar: rgba(255,255,255,0.04); --glass-input: rgba(255,255,255,0.11); }
+
+/* — Medium ---------------------------------------------------------------- */
+html.glass-medium                { --glass-blur: 28px;  --glass-saturate: 178%; }
+html.glass-medium:not(.dark)     { --glass-surface: rgba(255,255,255,0.68); --glass-sidebar: rgba(255,255,255,0.56); --glass-input: rgba(255,255,255,0.80); }
+html.glass-medium.dark           { --glass-surface: rgba(255,255,255,0.08); --glass-sidebar: rgba(255,255,255,0.06); --glass-input: rgba(255,255,255,0.13); }
+
+/* — Frosted --------------------------------------------------------------- */
+html.glass-frosted               { --glass-blur: 64px;  --glass-saturate: 210%; }
+html.glass-frosted:not(.dark)    { --glass-surface: rgba(255,255,255,0.78); --glass-sidebar: rgba(255,255,255,0.66); --glass-input: rgba(255,255,255,0.88); --glass-edge: inset 0 1px 0 rgba(255,255,255,1.0); }
+html.glass-frosted.dark          { --glass-surface: rgba(255,255,255,0.12); --glass-sidebar: rgba(255,255,255,0.10); --glass-input: rgba(255,255,255,0.16); --glass-edge: inset 0 1px 0 rgba(255,255,255,0.14); }
+
+/* — None ------------------------------------------------------------------ */
+html.glass-none                  { --glass-blur: 0px;   --glass-saturate: 100%; }
+
+/* ── Component rules ──────────────────────────────────────────────────────── */
+
+/* Sidebar panel */
+html.glass-subtle [data-slot="sidebar-inner"],
+html.glass-medium [data-slot="sidebar-inner"],
+html.glass-frosted [data-slot="sidebar-inner"] {
+  background: var(--glass-sidebar) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-edge);
+}
+
+/* ── Background blur when any overlay/dialog opens ──────────────────────── */
+/* Applies to ALL modes — the blur visually separates the raised layer.    */
+[data-slot="dialog-overlay"] {
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+}
+/* Glass presets: softer dim + stronger blur */
+html.glass-subtle [data-slot="dialog-overlay"],
+html.glass-medium [data-slot="dialog-overlay"],
+html.glass-frosted [data-slot="dialog-overlay"] {
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+
+/* Settings dialog — content pane */
+html.glass-subtle [data-slot="dialog-content"],
+html.glass-medium [data-slot="dialog-content"],
+html.glass-frosted [data-slot="dialog-content"] {
+  background: var(--glass-surface) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-edge), 0 32px 80px rgba(0, 0, 0, 0.42);
+}
+
+/* Settings dialog — inner nav sidebar + scroll area */
+html.glass-subtle [data-slot="dialog-content"] .bg-sidebar,
+html.glass-medium [data-slot="dialog-content"] .bg-sidebar,
+html.glass-frosted [data-slot="dialog-content"] .bg-sidebar {
+  background: var(--glass-sidebar) !important;
+}
+
+/* Main content area — the panel right of the sidebar */
+html.glass-subtle [data-slot="sidebar-inset"],
+html.glass-medium [data-slot="sidebar-inset"],
+html.glass-frosted [data-slot="sidebar-inset"] {
+  background: var(--glass-surface) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Chat input box — semantic class applied in input-box.tsx */
+/* Uses --glass-input which is more opaque than --glass-surface for readability */
+.glass-chat-input {
+  /* Fallback when no glass preset is active */
+  background: var(--background-surface);
+}
+html.glass-subtle .glass-chat-input,
+html.glass-medium .glass-chat-input,
+html.glass-frosted .glass-chat-input {
+  background: var(--glass-input);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-edge), inset 0 0 0 1px var(--glass-border);
+}
+
+/* Follow-up suggestion chips */
+.glass-chip {
+  background: var(--background-surface);
+}
+html.glass-subtle .glass-chip,
+html.glass-medium .glass-chip,
+html.glass-frosted .glass-chip {
+  background: var(--glass-sidebar);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/* Push sidebar content below traffic lights on macOS Electron */
+html.electron-darwin [data-slot="sidebar-inner"] {
+  padding-top: var(--traffic-light-top) !important;
+}
+/* Push main content area below traffic lights on macOS Electron */
+html.electron-darwin [data-slot="sidebar-inset"] {
+  padding-top: var(--traffic-light-top) !important;
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(0.9855 0.0098 87.47);

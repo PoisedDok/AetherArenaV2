@@ -353,6 +353,17 @@ export const enUS: Translations = {
       displayNameDescription:
         "Shown in the sidebar. Leave blank to use your device account name when available.",
       displayNamePlaceholder: "e.g. Alex",
+      glassTitle: "Glass Effect",
+      glassDescription:
+        "Surface blur and transparency applied to the sidebar, dialogs, and input. Higher settings require more GPU.",
+      glassSubtle: "Subtle",
+      glassSubtleDescription: "Barely-there frosting. Near-flat with a light haze.",
+      glassMedium: "Medium",
+      glassMediumDescription: "Balanced depth. Premium glass without distraction.",
+      glassFrosted: "Frosted",
+      glassFrostedDescription: "Heavy frost — maximum depth, macOS-style vibrancy.",
+      glassNone: "None",
+      glassNoneDescription: "Flat solid surfaces. No blur or transparency.",
     },
     tools: {
       title: "Tools",

@@ -1,10 +1,9 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
-  ChevronUp,
+  ChevronDownIcon,
   FolderOpenIcon,
   GlobeIcon,
-  LightbulbIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
   NotebookPenIcon,
@@ -12,7 +11,7 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ChainOfThought,
@@ -22,7 +21,6 @@ import {
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 import { CodeBlock } from "@/components/ai-elements/code-block";
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
@@ -31,7 +29,6 @@ import {
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
@@ -39,6 +36,28 @@ import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
+
+interface GenericCoTStep<T extends string = string> {
+  id?: string;
+  messageId?: string;
+  type: T;
+}
+
+interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
+  reasoning: string | null;
+}
+
+interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
+  name: string;
+  args: Record<string, unknown>;
+  result?: string;
+}
+
+interface CoTContentStep extends GenericCoTStep<"content"> {
+  content: string;
+}
+
+type CoTStep = CoTReasoningStep | CoTToolCallStep | CoTContentStep;
 
 export function MessageGroup({
   className,
@@ -49,192 +68,60 @@ export function MessageGroup({
   messages: Message[];
   isLoading?: boolean;
 }) {
-  const { t } = useI18n();
-  const [showAbove, setShowAbove] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
-  );
-  const [showLastThinking, setShowLastThinking] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
-  );
   const steps = useMemo(() => convertToSteps(messages), [messages]);
-  const lastToolCallStep = useMemo(() => {
-    const filteredSteps = steps.filter((step) => step.type === "toolCall");
-    return filteredSteps[filteredSteps.length - 1];
+  const lastToolCallIndex = useMemo(() => {
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const s = steps[i];
+      if (s?.type === "toolCall") {
+        return i;
+      }
+    }
+    return -1;
   }, [steps]);
-  // Split steps: those before the last tool call, and those after
-  const { beforeLastToolCall, afterLastToolCall } = useMemo(() => {
-    if (lastToolCallStep) {
-      const index = steps.indexOf(lastToolCallStep);
-      return {
-        beforeLastToolCall: steps.slice(0, index),
-        afterLastToolCall: steps.slice(index + 1),
-      };
-    }
-    return { beforeLastToolCall: steps, afterLastToolCall: [] };
-  }, [lastToolCallStep, steps]);
-  // Content and reasoning before the last tool call: always visible
-  const contentBeforeLastToolCall = useMemo(
-    () => beforeLastToolCall.filter((step) => step.type === "content"),
-    [beforeLastToolCall],
-  );
-  const reasoningBeforeLastToolCall = useMemo(
-    () => beforeLastToolCall.filter((step) => step.type === "reasoning"),
-    [beforeLastToolCall],
-  );
-  // Only tool calls before the last one should be collapsible
-  const toolCallsBeforeLast = useMemo(
-    () => beforeLastToolCall.filter((step) => step.type === "toolCall"),
-    [beforeLastToolCall],
-  );
-  // Content and reasoning after the last tool call: always visible
-  const contentAfterLastToolCall = useMemo(
-    () => afterLastToolCall.filter((step) => step.type === "content"),
-    [afterLastToolCall],
-  );
-  const lastReasoningStep = useMemo(() => {
-    const reasoningAfter = afterLastToolCall.filter(
-      (step) => step.type === "reasoning",
-    );
-    if (reasoningAfter.length > 0) {
-      return reasoningAfter[0];
-    }
-    // If no reasoning after, check all reasoning
-    const allReasoning = steps.filter((step) => step.type === "reasoning");
-    return allReasoning[allReasoning.length - 1];
-  }, [afterLastToolCall, steps]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
       open={true}
     >
-      {/* Content before last tool call - always visible */}
-      {contentBeforeLastToolCall.map((step) => (
-        <ChainOfThoughtContent key={step.id} className="px-4 pb-2">
-          <ChainOfThoughtStep
-            label={
-              <MarkdownContent
-                content={step.content}
-                isLoading={isLoading}
-                rehypePlugins={rehypePlugins}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </ChainOfThoughtContent>
-      ))}
-      {/* Reasoning before last tool call - always visible */}
-      {reasoningBeforeLastToolCall.map((step) => (
-        <ChainOfThoughtContent key={step.id} className="px-4 pb-2">
-          <ChainOfThoughtStep
-            label={
-              <MarkdownContent
-                content={step.reasoning ?? ""}
-                isLoading={isLoading}
-                rehypePlugins={rehypePlugins}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </ChainOfThoughtContent>
-      ))}
-      {/* Collapsible button for previous tool calls */}
-      {toolCallsBeforeLast.length > 0 && (
-        <Button
-          key="above"
-          className="w-full items-start justify-start text-left"
-          variant="ghost"
-          onClick={() => setShowAbove(!showAbove)}
-        >
-          <ChainOfThoughtStep
-            label={
-              <span className="opacity-60">
-                {showAbove
-                  ? t.toolCalls.lessSteps
-                  : t.toolCalls.moreSteps(toolCallsBeforeLast.length)}
-              </span>
-            }
-            icon={
-              <ChevronUp
-                className={cn(
-                  "size-4 opacity-60 transition-transform duration-200",
-                  showAbove ? "rotate-180" : "",
-                )}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </Button>
-      )}
-      {/* Tool calls section: previous (collapsible) + last (always visible) */}
-      {lastToolCallStep && (
-        <ChainOfThoughtContent className="px-4 pb-2">
-          {showAbove &&
-            toolCallsBeforeLast.map((step) => (
-              <ToolCall key={step.id} {...step} isLoading={isLoading} />
-            ))}
-          <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
-            <ToolCall
-              key={lastToolCallStep.id}
-              {...lastToolCallStep}
-              isLast={true}
-              isLoading={isLoading}
-            />
-          </FlipDisplay>
-        </ChainOfThoughtContent>
-      )}
-      {/* Content after last tool call - always visible */}
-      {contentAfterLastToolCall.map((step) => (
-        <ChainOfThoughtContent key={step.id} className="px-4 pb-2">
-          <ChainOfThoughtStep
-            label={
-              <MarkdownContent
-                content={step.content}
-                isLoading={isLoading}
-                rehypePlugins={rehypePlugins}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </ChainOfThoughtContent>
-      ))}
-      {/* Reasoning after last tool call - collapsible */}
-      {lastReasoningStep && (
-        <>
-          <Button
-            key={lastReasoningStep.id}
-            className="w-full items-start justify-start text-left"
-            variant="ghost"
-            onClick={() => setShowLastThinking(!showLastThinking)}
-          >
-            <div className="flex w-full items-center justify-between">
+      {steps.map((step, i) => {
+        if (step.type === "reasoning" || step.type === "content") {
+          return (
+            <ChainOfThoughtContent
+              key={step.id ?? `text-${i}`}
+              className="px-4 pb-2"
+            >
               <ChainOfThoughtStep
-                className="font-normal"
-                label={t.common.thinking}
-                icon={LightbulbIcon}
-              ></ChainOfThoughtStep>
-              <div>
-                <ChevronUp
-                  className={cn(
-                    "text-muted-foreground size-4",
-                    showLastThinking ? "" : "rotate-180",
-                  )}
-                />
-              </div>
-            </div>
-          </Button>
-          {showLastThinking && (
-            <ChainOfThoughtContent className="px-4 pb-2">
-              <ChainOfThoughtStep
-                key={lastReasoningStep.id}
                 label={
                   <MarkdownContent
-                    content={lastReasoningStep.reasoning ?? ""}
+                    content={
+                      step.type === "reasoning"
+                        ? (step.reasoning ?? "")
+                        : step.content
+                    }
                     isLoading={isLoading}
                     rehypePlugins={rehypePlugins}
                   />
                 }
               ></ChainOfThoughtStep>
             </ChainOfThoughtContent>
-          )}
-        </>
-      )}
+          );
+        }
+        return (
+          <ChainOfThoughtContent
+            key={step.id ?? `tool-${i}`}
+            className="px-4 pb-2"
+          >
+            <FlipDisplay uniqueKey={step.id ?? String(i)}>
+              <ToolCall
+                {...step}
+                isLast={i === lastToolCallIndex}
+                isLoading={isLoading}
+              />
+            </FlipDisplay>
+          </ChainOfThoughtContent>
+        );
+      })}
     </ChainOfThought>
   );
 }
@@ -478,28 +365,6 @@ function ToolCall({
   }
 }
 
-interface GenericCoTStep<T extends string = string> {
-  id?: string;
-  messageId?: string;
-  type: T;
-}
-
-interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
-  reasoning: string | null;
-}
-
-interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
-  name: string;
-  args: Record<string, unknown>;
-  result?: string;
-}
-
-interface CoTContentStep extends GenericCoTStep<"content"> {
-  content: string;
-}
-
-type CoTStep = CoTReasoningStep | CoTToolCallStep | CoTContentStep;
-
 function convertToSteps(messages: Message[]): CoTStep[] {
   const steps: CoTStep[] = [];
   for (const message of messages) {
@@ -510,7 +375,7 @@ function convertToSteps(messages: Message[]): CoTStep[] {
           id: message.id,
           messageId: message.id,
           type: "reasoning",
-          reasoning: extractReasoningContentFromMessage(message),
+          reasoning,
         };
         steps.push(step);
       }
