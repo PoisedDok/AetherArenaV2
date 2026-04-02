@@ -68,6 +68,7 @@ def model_to_gateway_dict(model: ModelConfig) -> dict[str, Any]:
         "description": model.description,
         "supports_thinking": model.supports_thinking,
         "supports_reasoning_effort": model.supports_reasoning_effort,
+        "supports_vision": model.supports_vision,
         "provider_use": model.use,
         "endpoint_url": endpoint_url,
     }

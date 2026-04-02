@@ -79,11 +79,36 @@ export function MessageGroup({
     return -1;
   }, [steps]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
+
+  // Start open while loading; auto-collapse when the agent finishes
+  const [isOpen, setIsOpen] = useState(isLoading);
+  useEffect(() => {
+    if (!isLoading) {
+      setIsOpen(false);
+    } else {
+      setIsOpen(true);
+    }
+  }, [isLoading]);
+
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
-      open={true}
+      open={isOpen}
+      onOpenChange={setIsOpen}
     >
+      <button
+        className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between px-3 py-1.5 text-xs transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+      >
+        <span>{isLoading ? "Working…" : "Tool calls"}</span>
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 transition-transform duration-200",
+            isOpen ? "rotate-180" : "rotate-0",
+          )}
+        />
+      </button>
       {steps.map((step, i) => {
         if (step.type === "reasoning" || step.type === "content") {
           return (

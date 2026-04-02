@@ -362,7 +362,22 @@ export function useThreadStream({
           is_bootstrap?: boolean;
           max_concurrent_subagents?: number;
           model_name?: string;
+          vision_model_name?: string;
         };
+
+        // If the message has image attachments and a dedicated vision model is set, use it
+        const hasImageFiles = (message.files ?? []).some((f) => {
+          const mediaType = f.mediaType ?? "";
+          const filename = f.filename ?? "";
+          return (
+            mediaType.startsWith("image/") ||
+            /\.(png|jpe?g|webp|gif)$/i.test(filename)
+          );
+        });
+        const effectiveModelName =
+          hasImageFiles && ctxWithExtras.vision_model_name
+            ? ctxWithExtras.vision_model_name
+            : ctxWithExtras.model_name;
         const isBootstrap = Boolean(ctxWithExtras.is_bootstrap);
         const rawExtra = extraContext ?? {};
         const agentNameFromExtra =
@@ -390,8 +405,8 @@ export function useThreadStream({
         if (reasoningEffort !== undefined) {
           runContext.reasoning_effort = reasoningEffort;
         }
-        if (ctxWithExtras.model_name) {
-          runContext.model_name = ctxWithExtras.model_name;
+        if (effectiveModelName) {
+          runContext.model_name = effectiveModelName;
         }
         if (agentNameFromExtra) {
           runContext.agent_name = agentNameFromExtra;

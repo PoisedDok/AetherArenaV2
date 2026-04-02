@@ -469,17 +469,18 @@ class TestGetModel:
         model_cfg.description = "A test model"
         model_cfg.supports_thinking = True
         model_cfg.supports_reasoning_effort = True
+        model_cfg.supports_vision = False
         client._app_config.get_model_config.return_value = model_cfg
 
         result = client.get_model("test-model")
-        assert result == {
-            "name": "test-model",
-            "model": "test-model",
-            "display_name": "Test Model",
-            "description": "A test model",
-            "supports_thinking": True,
-            "supports_reasoning_effort": True,
-        }
+        assert result is not None
+        assert result["name"] == "test-model"
+        assert result["model"] == "test-model"
+        assert result["display_name"] == "Test Model"
+        assert result["description"] == "A test model"
+        assert result["supports_thinking"] is True
+        assert result["supports_reasoning_effort"] is True
+        assert result["supports_vision"] is False
 
     def test_not_found(self, client):
         client._app_config.get_model_config.return_value = None

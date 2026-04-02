@@ -387,6 +387,11 @@ export const enUS: Translations = {
       capabilitiesThinking: "Thinking",
       capabilitiesReasoning: "Reasoning effort",
       capabilitiesNone: "Standard chat",
+      capabilitiesVision: "Vision",
+      visionModelTitle: "Vision model",
+      visionModelDescription:
+        "Used when messages contain images. Select a vision-capable model from your provider. Leave as 'Same as chat model' if your chat model already supports images.",
+      visionModelNone: "Same as chat model",
     },
     skills: {
       title: "Agent Skills",

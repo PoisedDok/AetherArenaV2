@@ -43,14 +43,13 @@ export function WorkspaceHeader({
   return (
     <header
       className={cn(
-        "app-drag top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
+        "top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
         className,
       )}
       {...props}
     >
       <div
-        className="app-no-drag flex items-center gap-2 pr-4"
-        style={{ paddingLeft: "max(1rem, var(--traffic-light-inset))" }}
+        className="flex items-center gap-2 px-4"
       >
         <Breadcrumb>
           <BreadcrumbList>

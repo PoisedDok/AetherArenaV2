@@ -19,6 +19,14 @@ export default async function RootLayout({
   const locale = await detectLocaleServer();
   return (
     <html lang={locale} suppressContentEditableWarning suppressHydrationWarning>
+      <head>
+        {/* Detect Electron on macOS before first paint — sets class used by traffic-light / drag CSS */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var d=window.deerflowDesktop;if(d&&d.isElectron&&d.platform==='darwin'){document.documentElement.classList.add('electron-darwin')}}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body>
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
           <I18nProvider initialLocale={locale}>{children}</I18nProvider>

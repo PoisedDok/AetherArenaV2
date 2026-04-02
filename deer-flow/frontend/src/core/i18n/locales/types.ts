@@ -313,6 +313,10 @@ export interface Translations {
       capabilitiesThinking: string;
       capabilitiesReasoning: string;
       capabilitiesNone: string;
+      capabilitiesVision: string;
+      visionModelTitle: string;
+      visionModelDescription: string;
+      visionModelNone: string;
     };
     skills: {
       title: string;

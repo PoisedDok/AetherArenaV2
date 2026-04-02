@@ -20,6 +20,7 @@ class ModelResponse(BaseModel):
     description: str | None = Field(None, description="Model description")
     supports_thinking: bool = Field(default=False, description="Whether model supports thinking mode")
     supports_reasoning_effort: bool = Field(default=False, description="Whether model supports reasoning effort")
+    supports_vision: bool = Field(default=False, description="Whether model supports vision/image inputs")
     provider_use: str = Field(..., description="LangChain provider class path from config `use`")
     endpoint_url: str | None = Field(
         default=None,
@@ -88,6 +89,20 @@ def _detect_thinking_support(model_id: str) -> bool:
     return False
 
 
+def _detect_vision_support(model_id: str) -> bool:
+    """Detect if a model supports vision/images based on its ID."""
+    lower = model_id.lower()
+    vision_patterns = [
+        "vision", "vl", "llava", "bakllava", "moondream", "cogvlm",
+        "qwen-vl", "qwenvl", "qwen2-vl", "qwen2vl", "qwen2.5-vl", "qwen2.5vl",
+        "minicpm-v", "minicpmv", "internvl", "intern-vl",
+        "phi-3-vision", "phi3-vision", "phi-4-vision", "phi4-vision",
+        "pixtral", "gemma3", "llama-3.2-vision", "llama3.2-vision",
+        "gpt-4o", "gpt4o", "claude-3", "gemini",
+    ]
+    return any(p in lower for p in vision_patterns)
+
+
 def _detect_reasoning_effort_support(model_id: str) -> bool:
     """Detect if a model supports reasoning effort control.
 
@@ -122,13 +137,26 @@ async def _fetch_remote_models(endpoint_url: str, base_model: ModelConfig) -> li
             # Skip embedding-only models
             if "embedding" in model_id.lower() or "rerank" in model_id.lower():
                 continue
+            # Skip non-ready models from providers that expose status
+            if rm.get("status") and rm["status"] not in ("available", "ready"):
+                continue
 
             # Format display name from model ID
             display_name = model_id.split("/")[-1].replace("-", " ").title()
 
-            # Detect actual thinking support from model ID, don't blindly copy from base config
+            # Use native capabilities if the provider exposes them (e.g. Aether inference),
+            # otherwise fall back to pattern matching on model ID (e.g. LM Studio).
+            native_caps = rm.get("capabilities") or {}
+            model_type = rm.get("model_type", "")
+
             supports_thinking = _detect_thinking_support(model_id)
             supports_reasoning_effort = _detect_reasoning_effort_support(model_id)
+            if "vision" in native_caps:
+                supports_vision = bool(native_caps["vision"])
+            elif model_type in ("vision", "multimodal"):
+                supports_vision = True
+            else:
+                supports_vision = _detect_vision_support(model_id)
 
             results.append(ModelResponse(
                 name=f"{base_model.name}/{model_id}",
@@ -137,6 +165,7 @@ async def _fetch_remote_models(endpoint_url: str, base_model: ModelConfig) -> li
                 description=f"Model from {base_model.display_name or base_model.name}",
                 supports_thinking=supports_thinking,
                 supports_reasoning_effort=supports_reasoning_effort,
+                supports_vision=supports_vision,
                 provider_use=base_model.use,
                 endpoint_url=endpoint_url,
             ))

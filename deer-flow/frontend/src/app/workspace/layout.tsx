@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CommandPalette } from "@/components/workspace/command-palette";
+import { WindowTitlebar } from "@/components/workspace/window-titlebar";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
@@ -43,6 +44,7 @@ export default function WorkspaceLayout({
   );
   return (
     <QueryClientProvider client={queryClient}>
+      <WindowTitlebar />
       <SidebarProvider
         className="h-screen"
         open={open}

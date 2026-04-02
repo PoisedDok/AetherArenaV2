@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, CpuIcon } from "lucide-react";
+import { CheckIcon, CpuIcon, EyeIcon } from "lucide-react";
 
 import {
   Item,
@@ -53,10 +53,22 @@ export function ModelsSettingsPage() {
     ? localSettings.context.model_name
     : undefined;
 
+  const storedVisionName: string | undefined = typeof localSettings.context.vision_model_name === "string" && localSettings.context.vision_model_name.length > 0
+    ? localSettings.context.vision_model_name
+    : undefined;
+
   const selectedModel = models.find((m) => m.name === storedName);
+  const visionModels = models.filter((m) => m.supports_vision === true);
+  const selectedVisionModel = visionModels.find((m) => m.name === storedVisionName);
 
   const handleModelChange = (modelName: string) => {
     setLocalSettings("context", { model_name: modelName });
+  };
+
+  const VISION_NONE = "__none__";
+
+  const handleVisionModelChange = (value: string) => {
+    setLocalSettings("context", { vision_model_name: value === VISION_NONE ? undefined : value });
   };
 
   // Group models by provider for the configured section
@@ -146,6 +158,55 @@ export function ModelsSettingsPage() {
             )}
           </div>
 
+          {/* Vision Model Selector */}
+          {visionModels.length > 0 && (
+            <div className="space-y-3">
+              <div className="text-sm font-medium flex items-center gap-2">
+                <EyeIcon className="size-4" />
+                {t.settings.models.visionModelTitle}
+              </div>
+              <p className="text-muted-foreground text-sm">
+                {t.settings.models.visionModelDescription}
+              </p>
+              <Select
+                value={storedVisionName ?? VISION_NONE}
+                disabled={demo}
+                onValueChange={(v: string) => handleVisionModelChange(v)}
+              >
+                <SelectTrigger className="w-full max-w-md">
+                  <SelectValue placeholder={t.settings.models.visionModelNone}>
+                    {selectedVisionModel ? formatModelLabel(selectedVisionModel) : t.settings.models.visionModelNone}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={VISION_NONE}>
+                    {t.settings.models.visionModelNone}
+                  </SelectItem>
+                  {visionModels.map((m) => (
+                    <SelectItem key={m.name} value={m.name}>
+                      <span className="flex items-center justify-between gap-4 w-full">
+                        <span>{formatModelLabel(m)}</span>
+                        <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
+                          {t.settings.models.capabilitiesVision}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedVisionModel && (
+                <div className="flex flex-col gap-1 text-xs text-muted-foreground pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{selectedVisionModel.name}</span>
+                    {selectedVisionModel.endpoint_url && (
+                      <span className="font-mono text-[10px] truncate">{selectedVisionModel.endpoint_url}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Configured Providers List */}
           <div className="flex flex-col gap-4">
             <div className="text-sm font-medium">
@@ -191,6 +252,11 @@ export function ModelsSettingsPage() {
                           {m.supports_reasoning_effort && (
                             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
                               {t.settings.models.capabilitiesReasoning}
+                            </span>
+                          )}
+                          {m.supports_vision && (
+                            <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
+                              {t.settings.models.capabilitiesVision}
                             </span>
                           )}
                         </div>

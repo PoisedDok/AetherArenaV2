@@ -240,16 +240,18 @@ html.electron-darwin {
   --traffic-light-top: 38px;
 }
 
-html.electron-darwin .app-drag {
+/* Drag region: always apply — harmless in regular browsers, required in Electron */
+.app-drag {
   -webkit-app-region: drag;
 }
 
-html.electron-darwin .app-drag button,
-html.electron-darwin .app-drag a,
-html.electron-darwin .app-drag [role="button"],
-html.electron-darwin .app-drag input,
-html.electron-darwin .app-drag select,
-html.electron-darwin .app-drag textarea {
+.app-drag button,
+.app-drag a,
+.app-drag [role="button"],
+.app-drag input,
+.app-drag select,
+.app-drag textarea,
+.app-no-drag {
   -webkit-app-region: no-drag;
 }
 

@@ -55,9 +55,11 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         model_settings_from_config["model"] = actual_model_id
 
     # Ensure local provider API keys take precedence over env vars (e.g., OPENAI_API_KEY)
-    # by explicitly setting api_key from config if present
-    if model_config.api_key:
-        model_settings_from_config["api_key"] = model_config.api_key
+    # by explicitly setting api_key from config if present.
+    # Use getattr because api_key is an extra Pydantic field and may not be set.
+    _api_key = getattr(model_config, "api_key", None)
+    if _api_key:
+        model_settings_from_config["api_key"] = _api_key
     # Compute effective when_thinking_enabled by merging in the `thinking` shortcut field.
     # The `thinking` shortcut is equivalent to setting when_thinking_enabled["thinking"].
     has_thinking_settings = (model_config.when_thinking_enabled is not None) or (model_config.thinking is not None)

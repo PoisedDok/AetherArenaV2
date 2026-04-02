@@ -9,6 +9,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   },
   context: {
     model_name: undefined,
+    vision_model_name: undefined,
     mode: undefined,
     reasoning_effort: undefined,
   },

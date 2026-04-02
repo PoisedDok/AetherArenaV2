@@ -55,8 +55,11 @@ def get_available_tools(
     if model_name is None and config.models:
         model_name = config.models[0].name
 
-    # Add view_image_tool only if the model supports vision
+    # Add view_image_tool only if the model supports vision.
+    # For dynamic provider/model names (e.g. "lmstudio/qwen2.5-vl"), fall back to the base provider config.
     model_config = config.get_model_config(model_name) if model_name else None
+    if model_config is None and model_name and "/" in model_name:
+        model_config = config.get_model_config(model_name.split("/")[0])
     if model_config is not None and model_config.supports_vision:
         builtin_tools.append(view_image_tool)
         logger.info(f"Including view_image_tool for model '{model_name}' (supports_vision=True)")

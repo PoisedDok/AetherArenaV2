@@ -76,17 +76,16 @@ export default function ChatPage() {
         <div className="relative flex size-full min-h-0 justify-between">
           <header
             className={cn(
-              "app-drag absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center pr-4",
+              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
               isNewThread
                 ? "bg-background/0 backdrop-blur-none"
                 : "bg-background/80 shadow-xs backdrop-blur",
             )}
-            style={{ paddingLeft: "max(1rem, var(--traffic-light-inset))" }}
           >
             <div className="flex w-full items-center text-sm font-medium">
               <ThreadTitle threadId={threadId} thread={thread} />
             </div>
-            <div className="app-no-drag flex items-center">
+            <div className="flex items-center">
               <ExportTrigger threadId={threadId} />
               <ArtifactTrigger />
             </div>
