@@ -21,9 +21,20 @@ export default async function RootLayout({
     <html lang={locale} suppressContentEditableWarning suppressHydrationWarning>
       <head>
         {/* Detect Electron on macOS before first paint — sets class used by traffic-light / drag CSS */}
+        {/* Pre-paint script: sets dark + glass + electron classes before any render.
+            Prevents white flash in Electron and theme flicker on workspace routes. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var d=window.deerflowDesktop;if(d&&d.isElectron&&d.platform==='darwin'){document.documentElement.classList.add('electron-darwin')}}catch(e){}})()`,
+            __html: `(function(){try{
+  var h=document.documentElement;
+  /* Always dark on workspace — prevents white flash before next-themes hydrates */
+  if(window.location.pathname==='/'||window.location.pathname.startsWith('/workspace')){h.classList.add('dark')}
+  var d=window.deerflowDesktop;
+  if(d){
+    if(d.isElectron&&d.platform==='darwin'){h.classList.add('electron-darwin')}
+    if(d.glassBackgroundMode==='native'){h.classList.add('native-glass')}
+  }
+}catch(e){}})()`,
           }}
         />
       </head>

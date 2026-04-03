@@ -261,11 +261,38 @@ html.electron-darwin {
  * Presets: glass-subtle | glass-medium | glass-frosted | glass-none
  * ─────────────────────────────────────────────────────────────────────── */
 
-/* Depth gradient — gives backdrop-filter something to blur over in dark mode */
-html.dark:not(.glass-none) body {
+/* ── Body background strategy ────────────────────────────────────────────
+ * In Electron (transparent window + macOS vibrancy / Win acrylic):
+ *   body must be transparent so the OS desktop shines through — exactly
+ *   like the splash screen. Glass components then blur THAT desktop.
+ *
+ * In browser (no vibrancy): paint the splash canvas gradient as fallback
+ *   so backdrop-filter has something rich to blur over.
+ *
+ * The `native-glass` class is set by splash-boot.js when vibrancy is active.
+ * The workspace layout also adds it via the same deerflowDesktop.glassBackgroundMode check.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Native glass (Electron vibrancy / acrylic): fully transparent body */
+html.native-glass body {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* Fallback for browser / Linux / effects-off: paint the splash canvas */
+html.dark:not(.native-glass) body {
+  background-color: #000000;
   background-image:
-    radial-gradient(ellipse 70% 55% at 12% 12%, rgba(0, 122, 255, 0.07) 0%, transparent 65%),
-    radial-gradient(ellipse 55% 70% at 88% 88%, rgba(120, 60, 220, 0.05) 0%, transparent 65%);
+    linear-gradient(180deg, #1c1c1e 0%, #070709 55%, #0a0a0a 100%),
+    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(0, 122, 255, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 85% 90%, rgba(100, 40, 200, 0.07) 0%, transparent 60%);
+  background-blend-mode: normal, screen, screen;
+  background-attachment: fixed;
+}
+
+html:not(.dark):not(.native-glass) body {
+  background-color: #f5f5f7;
+  background-image: linear-gradient(180deg, #ffffff 0%, #f2f2f7 45%, #ebebef 100%);
   background-attachment: fixed;
 }
 
@@ -279,34 +306,36 @@ html.dark:not(.glass-none) body {
   --glass-input:   rgba(255, 255, 255, 0.72);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --glass-border: rgba(0, 0, 0, 0.07);
-  /* Fallback solid surface (mirrors bg-background/85) */
-  --background-surface: color-mix(in oklch, oklch(0.9855 0.0098 87.47) 85%, transparent);
+  /* Fallback solid surface (mirrors light canvas) */
+  --background-surface: rgba(242, 242, 247, 0.88);
 }
 
-/* Dark mode overrides */
+/* Dark mode overrides — mirrors splash exactly:
+ * glass-surface = rgba(255,255,255,0.04), edge-top = inset 0 1px 0 rgba(255,255,255,0.09) */
 html.dark {
-  --glass-surface: rgba(255, 255, 255, 0.06);
-  --glass-sidebar: rgba(255, 255, 255, 0.04);
-  --glass-input:   rgba(255, 255, 255, 0.10);
+  --glass-surface: rgba(255, 255, 255, 0.04);
+  --glass-sidebar: rgba(255, 255, 255, 0.03);
+  --glass-input:   rgba(255, 255, 255, 0.08);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --background-surface: color-mix(in oklch, oklch(0.24 0.0036 106.64) 85%, transparent);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  /* Fallback surface when backdrop-filter is unsupported */
+  --background-surface: rgba(28, 28, 30, 0.85);
 }
 
 /* — Subtle ---------------------------------------------------------------- */
-html.glass-subtle                { --glass-blur: 10px;  --glass-saturate: 148%; }
+html.glass-subtle                { --glass-blur: 14px;  --glass-saturate: 160%; }
 html.glass-subtle:not(.dark)     { --glass-surface: rgba(255,255,255,0.52); --glass-sidebar: rgba(255,255,255,0.42); --glass-input: rgba(255,255,255,0.72); }
-html.glass-subtle.dark           { --glass-surface: rgba(255,255,255,0.05); --glass-sidebar: rgba(255,255,255,0.04); --glass-input: rgba(255,255,255,0.11); }
+html.glass-subtle.dark           { --glass-surface: rgba(255,255,255,0.04); --glass-sidebar: rgba(255,255,255,0.03); --glass-input: rgba(255,255,255,0.08); }
 
-/* — Medium ---------------------------------------------------------------- */
+/* — Medium (default) ------------------------------------------------------ */
 html.glass-medium                { --glass-blur: 28px;  --glass-saturate: 178%; }
-html.glass-medium:not(.dark)     { --glass-surface: rgba(255,255,255,0.68); --glass-sidebar: rgba(255,255,255,0.56); --glass-input: rgba(255,255,255,0.80); }
-html.glass-medium.dark           { --glass-surface: rgba(255,255,255,0.08); --glass-sidebar: rgba(255,255,255,0.06); --glass-input: rgba(255,255,255,0.13); }
+html.glass-medium:not(.dark)     { --glass-surface: rgba(255,255,255,0.65); --glass-sidebar: rgba(255,255,255,0.54); --glass-input: rgba(255,255,255,0.80); }
+html.glass-medium.dark           { --glass-surface: rgba(255,255,255,0.06); --glass-sidebar: rgba(255,255,255,0.05); --glass-input: rgba(255,255,255,0.10); }
 
 /* — Frosted --------------------------------------------------------------- */
 html.glass-frosted               { --glass-blur: 64px;  --glass-saturate: 210%; }
 html.glass-frosted:not(.dark)    { --glass-surface: rgba(255,255,255,0.78); --glass-sidebar: rgba(255,255,255,0.66); --glass-input: rgba(255,255,255,0.88); --glass-edge: inset 0 1px 0 rgba(255,255,255,1.0); }
-html.glass-frosted.dark          { --glass-surface: rgba(255,255,255,0.12); --glass-sidebar: rgba(255,255,255,0.10); --glass-input: rgba(255,255,255,0.16); --glass-edge: inset 0 1px 0 rgba(255,255,255,0.14); }
+html.glass-frosted.dark          { --glass-surface: rgba(255,255,255,0.08); --glass-sidebar: rgba(255,255,255,0.06); --glass-input: rgba(255,255,255,0.12); --glass-edge: inset 0 1px 0 rgba(255,255,255,0.14); }
 
 /* — None ------------------------------------------------------------------ */
 html.glass-none                  { --glass-blur: 0px;   --glass-saturate: 100%; }
@@ -323,37 +352,59 @@ html.glass-frosted [data-slot="sidebar-inner"] {
   box-shadow: var(--glass-edge);
 }
 
-/* ── Background blur when any overlay/dialog opens ──────────────────────── */
-/* Applies to ALL modes — the blur visually separates the raised layer.    */
-[data-slot="dialog-overlay"] {
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-}
-/* Glass presets: softer dim + stronger blur */
-html.glass-subtle [data-slot="dialog-overlay"],
-html.glass-medium [data-slot="dialog-overlay"],
-html.glass-frosted [data-slot="dialog-overlay"] {
-  background: rgba(0, 0, 0, 0.45) !important;
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+/* ── Dialog / Sheet overlay — heavily blurs + dims the background ────────
+ * The overlay is the FULL-SCREEN layer behind the dialog.
+ * It must be opaque enough that the content behind is completely obscured
+ * (like macOS Spotlight) while the blur makes it feel premium, not muddy.
+ * ─────────────────────────────────────────────────────────────────────── */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+  /* Light mode: white-tinted heavy blur */
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(72px) saturate(200%);
+  -webkit-backdrop-filter: blur(72px) saturate(200%);
 }
 
-/* Settings dialog — content pane */
-html.glass-subtle [data-slot="dialog-content"],
-html.glass-medium [data-slot="dialog-content"],
-html.glass-frosted [data-slot="dialog-content"] {
-  background: var(--glass-surface) !important;
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  border-color: var(--glass-border) !important;
-  box-shadow: var(--glass-edge), 0 32px 80px rgba(0, 0, 0, 0.42);
+html.dark [data-slot="dialog-overlay"],
+html.dark [data-slot="sheet-overlay"] {
+  /* Dark mode: near-black tint + maximum blur — content behind fully obscured */
+  background: rgba(0, 0, 0, 0.72) !important;
+  backdrop-filter: blur(80px) saturate(220%);
+  -webkit-backdrop-filter: blur(80px) saturate(220%);
 }
 
-/* Settings dialog — inner nav sidebar + scroll area */
-html.glass-subtle [data-slot="dialog-content"] .bg-sidebar,
-html.glass-medium [data-slot="dialog-content"] .bg-sidebar,
-html.glass-frosted [data-slot="dialog-content"] .bg-sidebar {
-  background: var(--glass-sidebar) !important;
+/* ── Dialog / Sheet content — solid frosted pane, always readable ─────────
+ * Unlike the window background (which is nearly transparent to show vibrancy),
+ * dialogs need a SOLID enough surface so their own text is legible.
+ * Apple HIG: modal surfaces are ~85% opaque frosted glass.
+ * ─────────────────────────────────────────────────────────────────────── */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"] {
+  /* Light mode: almost-white frosted card */
+  background: rgba(250, 250, 252, 0.92) !important;
+  backdrop-filter: blur(48px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(200%);
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08), 0 24px 60px rgba(0,0,0,0.22);
+  color: #1d1d1f;
+}
+
+html.dark [data-slot="dialog-content"],
+html.dark [data-slot="sheet-content"] {
+  /* Dark mode: deep dark frosted — matches Apple system panel (NSVisualEffectView dark) */
+  background: rgba(30, 30, 32, 0.88) !important;
+  backdrop-filter: blur(56px) saturate(220%);
+  -webkit-backdrop-filter: blur(56px) saturate(220%);
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 24px 60px rgba(0,0,0,0.55);
+  color: #f5f5f7;
+}
+
+/* Dialog inner nav sidebar */
+html.dark [data-slot="dialog-content"] .bg-sidebar,
+html.dark [data-slot="sheet-content"] .bg-sidebar {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Main content area — the panel right of the sidebar */
@@ -439,36 +490,38 @@ html.electron-darwin [data-slot="sidebar-inset"] {
 }
 
 .dark {
-  --background: oklch(0.24 0.0036 106.64);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.238 0.0036 106.64);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0.0036 106.64);
-  --popover-foreground: oklch(0.985 0 0);
+  /* In vibrancy mode --background is nearly transparent — the OS desktop is the bg.
+   * These values are used as fallback solid fills when backdrop-filter is unavailable. */
+  --background: oklch(0.18 0.003 264 / 85%);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.20 0.003 264 / 80%);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.18 0.003 264 / 90%);
+  --popover-foreground: oklch(0.96 0 0);
   --primary: oklch(1 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.3 0.0036 106.64);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0.0036 106.64);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.32 0.0036 106.64);
-  --accent-foreground: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.14 0 0);
+  --secondary: oklch(0.26 0.003 264);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.22 0.003 264);
+  --muted-foreground: oklch(0.62 0 0);
+  --accent: oklch(0.28 0.003 264);
+  --accent-foreground: oklch(0.96 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0.191 22.216 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.12);
   --ring: transparent;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.245 0.0036 106.64);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.20 0.003 264 / 75%);
+  --sidebar-foreground: oklch(0.96 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.29 0.0036 106.64);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.25 0.003 264);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: oklch(0.556 0 0);
   font-weight: 300;
 }
@@ -571,3 +624,144 @@ html.electron-darwin [data-slot="sidebar-inset"] {
   --container-width-md: calc(var(--spacing) * 204);
   --container-width-lg: calc(var(--spacing) * 256);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * WORKSPACE GLASS OVERRIDES
+ * Fixes all opaque surfaces in dark/glass mode so the full window looks
+ * like the startup splash: nearly-transparent panes with heavy backdrop-blur
+ * revealing the OS desktop (vibrancy) or the canvas gradient behind them.
+ *
+ * Dark CSS token values become transparent glass:
+ *   --background  → rgba(255,255,255,0.04) glass surface + backdrop-filter
+ *   --secondary   → rgba(255,255,255,0.07) slightly more visible for user msgs
+ *   --muted/accent → rgba(255,255,255,0.05)
+ *   --foreground  → #f5f5f7 (Apple light text, always readable on dark glass)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Dark mode: override token values so every component using them becomes glass ── */
+html.dark {
+  /* Nearly-transparent surfaces — backdrop-filter does the frosting */
+  --background:          rgba(255, 255, 255, 0.04);
+  --card:                rgba(255, 255, 255, 0.05);
+  --popover:             rgba(255, 255, 255, 0.06);
+  --secondary:           rgba(255, 255, 255, 0.07);
+  --muted:               rgba(255, 255, 255, 0.05);
+  --accent:              rgba(255, 255, 255, 0.06);
+  --sidebar:             rgba(255, 255, 255, 0.03);
+
+  /* Crystal-clear Apple-style text */
+  --foreground:          #f5f5f7;
+  --card-foreground:     #f5f5f7;
+  --popover-foreground:  #f5f5f7;
+  --secondary-foreground: #f5f5f7;
+  --accent-foreground:   #f5f5f7;
+  --sidebar-foreground:  #f5f5f7;
+  --muted-foreground:    rgba(245, 245, 247, 0.55);
+
+  /* Hairline borders matching splash edge style */
+  --border:              rgba(255, 255, 255, 0.10);
+  --input:               rgba(255, 255, 255, 0.10);
+  --sidebar-border:      rgba(255, 255, 255, 0.07);
+}
+
+/* ── Semantic glass surface class — use instead of bg-background/95 on cards ── */
+.glass-surface-card {
+  background: var(--glass-surface);
+  backdrop-filter: blur(var(--glass-blur, 28px)) saturate(var(--glass-saturate, 178%));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 28px)) saturate(var(--glass-saturate, 178%));
+}
+html:not(.dark) .glass-surface-card {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Chat header bar — thin glass strip at top of message area ── */
+.glass-header {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+html:not(.dark) .glass-header {
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* ── User message bubble — glass pill with legible contrast ── */
+/* bg-secondary on .is-user group → frosted pill, not opaque dark box */
+html.dark .group-\[\.is-user\]\:bg-secondary {
+  background: rgba(255, 255, 255, 0.11) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), inset 0 0 0 1px rgba(255,255,255,0.07);
+}
+
+/* ── Assistant message area — NO background, NO box, just text on glass ── */
+/* The .is-assistant MessageContent must be invisible — text floats on the window */
+html.dark .group-\[\.is-assistant\]\:text-foreground {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Tool-calls collapsible / accordion ── */
+/* The rounded bordered box that wraps "Tool calls ▾" — needs glass, not opaque */
+html.dark .not-prose > [class*="border"][class*="rounded"] {
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(28px) saturate(178%);
+  -webkit-backdrop-filter: blur(28px) saturate(178%);
+}
+
+/* ── Sidebar rail ── */
+html.dark [data-slot="sidebar-rail"] {
+  background: transparent;
+}
+
+/* ── Tooltips ── */
+html.dark [data-slot="tooltip-content"] {
+  background: rgba(20, 20, 22, 0.88) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #f5f5f7;
+}
+
+/* ── Dropdown menus / command palette / model selector ── */
+html.dark [role="listbox"],
+html.dark [role="menu"] {
+  background: rgba(18, 18, 20, 0.88) !important;
+  backdrop-filter: blur(48px) saturate(210%);
+  -webkit-backdrop-filter: blur(48px) saturate(210%);
+  border-color: rgba(255,255,255,0.10) !important;
+}
+html.dark [data-radix-popper-content-wrapper] > div {
+  background: rgba(18, 18, 20, 0.88) !important;
+  backdrop-filter: blur(48px) saturate(210%);
+  -webkit-backdrop-filter: blur(48px) saturate(210%);
+}
+
+/* ── Input fields ── */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.dark textarea,
+html.dark [role="combobox"] {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #f5f5f7 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: rgba(245, 245, 247, 0.38) !important;
+}
+
+/* ── Separator lines ── */
+html.dark [data-slot="separator"],
+html.dark hr {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Scrollbars ── */
+html.dark ::-webkit-scrollbar { width: 5px; height: 5px; }
+html.dark ::-webkit-scrollbar-track { background: transparent; }
+html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 9999px; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }

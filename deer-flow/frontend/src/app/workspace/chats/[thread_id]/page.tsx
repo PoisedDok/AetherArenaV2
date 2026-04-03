@@ -78,8 +78,8 @@ export default function ChatPage() {
             className={cn(
               "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
               isNewThread
-                ? "bg-background/0 backdrop-blur-none"
-                : "bg-background/80 shadow-xs backdrop-blur",
+                ? "bg-transparent backdrop-blur-none"
+                : "glass-header shadow-xs",
             )}
           >
             <div className="flex w-full items-center text-sm font-medium">

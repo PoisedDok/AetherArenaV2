@@ -8,10 +8,11 @@ export function ThemeProvider({
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
   const pathname = usePathname();
+  const isDark = pathname === "/" || pathname.startsWith("/workspace");
   return (
     <NextThemesProvider
       {...props}
-      forcedTheme={pathname === "/" ? "dark" : undefined}
+      forcedTheme={isDark ? "dark" : undefined}
     >
       {children}
     </NextThemesProvider>

@@ -44,9 +44,11 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   // Track all write_file/str_replace paths seen in this thread so the Artifacts
   // button stays visible even after streaming ends (when selectedArtifact is cleared).
+  const messages = thread.messages;
+  const messagesKey = messages.map((m) => m.id).join(",");
   useEffect(() => {
     const urls: string[] = [];
-    for (const msg of thread.messages) {
+    for (const msg of messages) {
       if (msg.type !== "ai") continue;
       for (const tc of msg.tool_calls ?? []) {
         if (
@@ -61,7 +63,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       }
     }
     setWriteFileArtifacts(urls);
-  }, [thread.messages, setWriteFileArtifacts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesKey]);
 
   // Reset auto-open at the start of each new streaming response
   // so the agent can auto-open artifacts for each turn
