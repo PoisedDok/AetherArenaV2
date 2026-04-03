@@ -13,6 +13,10 @@ export interface ArtifactsContextType {
   artifacts: string[];
   setArtifacts: (artifacts: string[]) => void;
 
+  /** write-file: URLs seen in this thread (from write_file/str_replace tool calls) */
+  writeFileArtifacts: string[];
+  setWriteFileArtifacts: (artifacts: string[]) => void;
+
   selectedArtifact: string | null;
   autoSelect: boolean;
   select: (artifact: string, autoSelect?: boolean) => void;
@@ -21,6 +25,7 @@ export interface ArtifactsContextType {
   open: boolean;
   autoOpen: boolean;
   setOpen: (open: boolean) => void;
+  resetAutoOpen: () => void;
 }
 
 const ArtifactsContext = createContext<ArtifactsContextType | undefined>(
@@ -33,6 +38,7 @@ interface ArtifactsProviderProps {
 
 export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   const [artifacts, setArtifacts] = useState<string[]>([]);
+  const [writeFileArtifacts, setWriteFileArtifacts] = useState<string[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [autoSelect, setAutoSelect] = useState(true);
   const [open, setOpen] = useState(
@@ -60,9 +66,17 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     setOpen(false);
   }, []);
 
+  const resetAutoOpen = useCallback(() => {
+    setAutoOpen(true);
+    setAutoSelect(true);
+  }, []);
+
   const value: ArtifactsContextType = {
     artifacts,
     setArtifacts,
+
+    writeFileArtifacts,
+    setWriteFileArtifacts,
 
     open,
     autoOpen,
@@ -78,6 +92,7 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     selectedArtifact,
     select,
     deselect,
+    resetAutoOpen,
   };
 
   return (

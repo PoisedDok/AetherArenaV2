@@ -93,14 +93,18 @@ export function ArtifactFileDetail({
 
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [isInstalling, setIsInstalling] = useState(false);
-  const { isMock } = useThread();
+  const { isMock, thread } = useThread();
+  const isStreaming = thread.isLoading;
+
+  // Stay on "code" tab while streaming so the user sees code being written.
+  // Switch to "preview" only after the agent finishes, for previewable files.
   useEffect(() => {
-    if (isSupportPreview) {
-      setViewMode("preview");
-    } else {
+    if (isStreaming) {
       setViewMode("code");
+    } else if (isSupportPreview) {
+      setViewMode("preview");
     }
-  }, [isSupportPreview]);
+  }, [isSupportPreview, isStreaming]);
 
   const handleInstallSkill = useCallback(async () => {
     if (isInstalling) return;

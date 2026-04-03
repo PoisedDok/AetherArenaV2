@@ -3,6 +3,7 @@ import type { Message } from "@langchain/langgraph-sdk";
 import {
   extractContentFromMessage,
   extractReasoningContentFromMessage,
+  extractTextFromMessage,
   hasContent,
   hasToolCalls,
   stripUploadedFilesTag,
@@ -17,10 +18,15 @@ function formatMessageContent(message: Message): string {
   return stripUploadedFilesTag(text);
 }
 
-function formatToolCalls(message: Message): string {
-  if (message.type !== "ai" || !hasToolCalls(message)) return "";
-  const calls = message.tool_calls ?? [];
-  return calls.map((call) => `- **Tool:** \`${call.name}\``).join("\n");
+/** Build a map from tool_call_id → tool result text for quick lookup. */
+function buildToolResultMap(messages: Message[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.type === "tool" && msg.tool_call_id) {
+      map.set(msg.tool_call_id, extractTextFromMessage(msg));
+    }
+  }
+  return map;
 }
 
 export function formatThreadAsMarkdown(
@@ -41,7 +47,11 @@ export function formatThreadAsMarkdown(
     "",
   ];
 
+  const toolResultMap = buildToolResultMap(messages);
+
   for (const message of messages) {
+    if (message.name === "todo_reminder") continue;
+
     if (message.type === "human") {
       const content = formatMessageContent(message);
       if (content) {
@@ -50,9 +60,9 @@ export function formatThreadAsMarkdown(
     } else if (message.type === "ai") {
       const reasoning = extractReasoningContentFromMessage(message);
       const content = formatMessageContent(message);
-      const toolCalls = formatToolCalls(message);
+      const calls = message.tool_calls ?? [];
 
-      if (!content && !toolCalls && !reasoning) continue;
+      if (!content && calls.length === 0 && !reasoning) continue;
 
       lines.push(`## 🤖 Assistant`);
 
@@ -68,16 +78,67 @@ export function formatThreadAsMarkdown(
         );
       }
 
-      if (toolCalls) {
-        lines.push("", toolCalls);
+      for (const call of calls) {
+        const args = call.args as Record<string, unknown>;
+        const description =
+          typeof args.description === "string" ? args.description : null;
+        const label = description ?? call.name;
+
+        lines.push("", `### 🔧 \`${call.name}\` — ${label}`);
+
+        // Show the most useful arg per tool type
+        if (call.name === "bash" && typeof args.command === "string") {
+          lines.push("", "```bash", args.command, "```");
+        } else if (
+          (call.name === "write_file" || call.name === "str_replace") &&
+          typeof args.path === "string"
+        ) {
+          lines.push("", `**Path:** \`${args.path}\``);
+          if (typeof args.content === "string") {
+            const lang = args.path.split(".").pop() ?? "";
+            lines.push("", `\`\`\`${lang}`, args.content, "```");
+          }
+        } else if (call.name === "read_file" && typeof args.path === "string") {
+          lines.push("", `**Path:** \`${args.path}\``);
+        } else if (
+          call.name === "web_search" &&
+          typeof args.query === "string"
+        ) {
+          lines.push("", `**Query:** ${args.query}`);
+        } else if (call.name === "web_fetch" && typeof args.url === "string") {
+          lines.push("", `**URL:** ${args.url}`);
+        } else if (
+          call.name === "present_files" &&
+          Array.isArray(args.filepaths)
+        ) {
+          lines.push(
+            "",
+            (args.filepaths as string[])
+              .map((f) => `- \`${f}\``)
+              .join("\n"),
+          );
+        }
+
+        // Append tool result if available
+        if (call.id) {
+          const result = toolResultMap.get(call.id);
+          if (result && result !== "OK" && result !== "Successfully presented files") {
+            const trimmed = result.length > 2000 ? result.slice(0, 2000) + "\n…(truncated)" : result;
+            lines.push("", "<details>", "<summary>Output</summary>", "", "```", trimmed, "```", "", "</details>");
+          }
+        }
       }
 
-      if (content && hasContent(message)) {
+      if (content && hasContent(message) && !hasToolCalls(message)) {
         lines.push("", content);
+      } else if (content && hasContent(message)) {
+        // AI replied with both tool calls and a text response
+        lines.push("", "---", "", content);
       }
 
       lines.push("", "---", "");
     }
+    // tool messages are folded into their AI message above — skip standalone rendering
   }
 
   return lines.join("\n").trimEnd() + "\n";

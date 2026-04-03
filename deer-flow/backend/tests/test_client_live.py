@@ -16,9 +16,10 @@ from deerflow.client import DeerFlowClient, StreamEvent
 
 # Skip entire module in CI or when no config.yaml exists
 _skip_reason = None
+_config_path = Path(__file__).resolve().parents[2].joinpath("config.yaml")
 if os.environ.get("CI"):
     _skip_reason = "Live tests skipped in CI"
-elif not Path(__file__).resolve().parents[2].joinpath("config.yaml").exists():
+elif not _config_path.exists():
     _skip_reason = "No config.yaml found — live tests require valid API credentials"
 
 if _skip_reason:
@@ -31,8 +32,15 @@ if _skip_reason:
 
 @pytest.fixture(scope="module")
 def client():
-    """Create a real DeerFlowClient (no mocks)."""
-    return DeerFlowClient(thinking_enabled=False)
+    """Create a real DeerFlowClient (no mocks).
+
+    Skips if the environment is missing required variables (e.g. running
+    outside Docker where $SEARXNG_URL etc. are not set).
+    """
+    try:
+        return DeerFlowClient(config_path=str(_config_path), thinking_enabled=False)
+    except (ValueError, FileNotFoundError) as exc:
+        pytest.skip(f"Live client unavailable: {exc}")
 
 
 @pytest.fixture

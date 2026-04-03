@@ -36,16 +36,12 @@ export function groupMessages<T>(
 
   const groups: MessageGroup[] = [];
 
-  // Returns the last group if it can still accept tool messages
-  // (i.e. it's an in-flight processing group, not a terminal human/assistant group).
+  // Returns the last group if it can still accept tool messages.
+  // Terminal groups (human, assistant, clarification) are closed; all others accept tool results.
   function lastOpenGroup() {
     const last = groups[groups.length - 1];
-    if (
-      last &&
-      last.type !== "human" &&
-      last.type !== "assistant" &&
-      last.type !== "assistant:clarification"
-    ) {
+    const CLOSED_TYPES = new Set(["human", "assistant", "assistant:clarification"]);
+    if (last && !CLOSED_TYPES.has(last.type)) {
       return last;
     }
     return null;
@@ -86,7 +82,16 @@ export function groupMessages<T>(
     }
 
     if (message.type === "ai") {
-      if (hasPresentFiles(message)) {
+      // A message may have present_files alongside other tool calls (write_file, bash, etc.).
+      // Only route to present-files group when it is the SOLE tool call — otherwise treat
+      // it as a normal processing step so all tool calls remain visible in the trace.
+      const onlyPresentFiles =
+        hasPresentFiles(message) &&
+        (message.tool_calls ?? []).every(
+          (tc) => tc.name === "present_files",
+        );
+
+      if (onlyPresentFiles) {
         groups.push({
           id: message.id,
           type: "assistant:present-files",

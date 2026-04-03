@@ -35,10 +35,43 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     open: artifactsOpen,
     setOpen: setArtifactsOpen,
     setArtifacts,
+    setWriteFileArtifacts,
     select: selectArtifact,
     deselect,
     selectedArtifact,
+    resetAutoOpen,
   } = useArtifacts();
+
+  // Track all write_file/str_replace paths seen in this thread so the Artifacts
+  // button stays visible even after streaming ends (when selectedArtifact is cleared).
+  useEffect(() => {
+    const urls: string[] = [];
+    for (const msg of thread.messages) {
+      if (msg.type !== "ai") continue;
+      for (const tc of msg.tool_calls ?? []) {
+        if (
+          (tc.name === "write_file" || tc.name === "str_replace") &&
+          typeof tc.args?.path === "string"
+        ) {
+          const url = new URL(
+            `write-file:${tc.args.path}?message_id=${msg.id}&tool_call_id=${tc.id}`,
+          ).toString();
+          if (!urls.includes(url)) urls.push(url);
+        }
+      }
+    }
+    setWriteFileArtifacts(urls);
+  }, [thread.messages, setWriteFileArtifacts]);
+
+  // Reset auto-open at the start of each new streaming response
+  // so the agent can auto-open artifacts for each turn
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (thread.isLoading && !wasLoading.current) {
+      resetAutoOpen();
+    }
+    wasLoading.current = thread.isLoading;
+  }, [thread.isLoading, resetAutoOpen]);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
