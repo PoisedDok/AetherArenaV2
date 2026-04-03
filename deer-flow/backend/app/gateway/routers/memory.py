@@ -1,9 +1,9 @@
 """Memory API router for retrieving and managing global memory data."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from deerflow.agents.memory.updater import get_memory_data, reload_memory_data
+from deerflow.agents.memory.updater import _save_memory_to_file, get_memory_data, reload_memory_data
 from deerflow.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api", tags=["memory"])
@@ -199,3 +199,81 @@ async def get_memory_status() -> MemoryStatusResponse:
         ),
         data=MemoryResponse(**memory_data),
     )
+
+
+# ── Mutation models ────────────────────────────────────────────────────────────
+
+
+class UpdateFactRequest(BaseModel):
+    """Request body for updating a fact."""
+
+    content: str = Field(..., description="Updated fact content")
+
+
+class UpdateSectionRequest(BaseModel):
+    """Request body for updating a context section summary."""
+
+    section: str = Field(..., description="Dot-path to section, e.g. 'user.workContext'")
+    summary: str = Field(..., description="New summary text")
+
+
+# ── Fact mutation endpoints ────────────────────────────────────────────────────
+
+
+@router.delete(
+    "/memory/facts/{fact_id}",
+    response_model=MemoryResponse,
+    summary="Delete a memory fact",
+)
+async def delete_memory_fact(fact_id: str) -> MemoryResponse:
+    """Remove a fact by ID and persist the updated memory."""
+    memory_data = get_memory_data()
+    facts = memory_data.get("facts", [])
+    new_facts = [f for f in facts if f.get("id") != fact_id]
+    if len(new_facts) == len(facts):
+        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found")
+    memory_data["facts"] = new_facts
+    _save_memory_to_file(memory_data)
+    return MemoryResponse(**memory_data)
+
+
+@router.patch(
+    "/memory/facts/{fact_id}",
+    response_model=MemoryResponse,
+    summary="Update a memory fact's content",
+)
+async def update_memory_fact(fact_id: str, body: UpdateFactRequest) -> MemoryResponse:
+    """Update a fact's content by ID and persist."""
+    memory_data = get_memory_data()
+    facts = memory_data.get("facts", [])
+    for fact in facts:
+        if fact.get("id") == fact_id:
+            fact["content"] = body.content
+            break
+    else:
+        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found")
+    memory_data["facts"] = facts
+    _save_memory_to_file(memory_data)
+    return MemoryResponse(**memory_data)
+
+
+@router.patch(
+    "/memory/sections",
+    response_model=MemoryResponse,
+    summary="Update a context section summary",
+)
+async def update_memory_section(body: UpdateSectionRequest) -> MemoryResponse:
+    """Update a named summary section (e.g. user.workContext) and persist."""
+    memory_data = get_memory_data()
+    # section is a dot-path like "user.workContext" or "history.recentMonths"
+    parts = body.section.split(".")
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="section must be a two-part dot-path, e.g. 'user.workContext'")
+    top, key = parts
+    if top not in memory_data or not isinstance(memory_data[top], dict):
+        raise HTTPException(status_code=404, detail=f"Section group '{top}' not found")
+    if key not in memory_data[top]:
+        raise HTTPException(status_code=404, detail=f"Section '{key}' not found in '{top}'")
+    memory_data[top][key]["summary"] = body.summary
+    _save_memory_to_file(memory_data)
+    return MemoryResponse(**memory_data)

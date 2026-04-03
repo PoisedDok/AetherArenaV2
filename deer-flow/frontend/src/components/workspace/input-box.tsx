@@ -6,6 +6,7 @@ import {
   CheckIcon,
   CpuIcon,
   GraduationCapIcon,
+  LayersIcon,
   LightbulbIcon,
   PaperclipIcon,
   PlusIcon,
@@ -71,6 +72,7 @@ import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
+import { useToolGroups } from "@/core/tool-groups/hooks";
 import type { Model } from "@/core/models/types";
 import { useLocalSettings } from "@/core/settings";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
@@ -989,8 +991,11 @@ function InputActionsMenu({
   const { mutate: enableSkill } = useEnableSkill();
   const { config: mcpConfig } = useMCPConfig();
   const { mutate: enableMCPServer } = useEnableMCPServer();
+  const { toolGroups: allToolGroups } = useToolGroups();
+  const enabledToolGroups = allToolGroups.filter((g) => g.enabled);
   const mcpServers = mcpConfig?.mcp_servers ?? {};
   const hasMCP = Object.keys(mcpServers).length > 0;
+  const hasToolGroups = enabledToolGroups.length > 0;
   // Currently selected agent label for the trigger badge
   const activeAgent = agentName ?? null;
 
@@ -1108,16 +1113,42 @@ function InputActionsMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        {/* System Tool Groups submenu */}
+        {hasToolGroups && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <LayersIcon className="size-4" />
+              <span>{t.agents.toolGroupsSection}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-64">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                {t.agents.toolGroupsSection}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {enabledToolGroups.map((group) => (
+                <DropdownMenuItem
+                  key={group.name}
+                  onSelect={(e) => e.preventDefault()}
+                  className="gap-2"
+                >
+                  <LayersIcon className="size-4 text-muted-foreground shrink-0" />
+                  <div className="truncate text-sm">{group.name}</div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
         {/* MCP Tools submenu — only shown when servers exist */}
         {hasMCP && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="gap-2">
               <WrenchIcon className="size-4" />
-              <span>{t.settings.tools.title}</span>
+              <span>{t.settings.tools.mcpTitle}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-64">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
-                {t.settings.tools.title}
+                {t.settings.tools.mcpTitle}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {Object.entries(mcpServers).map(([name, serverConfig]) => (

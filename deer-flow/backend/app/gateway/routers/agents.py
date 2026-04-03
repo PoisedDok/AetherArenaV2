@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
+from deerflow.config.app_config import get_app_config
+from deerflow.config.extensions_config import ExtensionsConfig, get_extensions_config, reload_extensions_config
 from deerflow.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,101 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
         tool_groups=agent_cfg.tool_groups,
         soul=soul,
     )
+
+
+class ToolGroupResponse(BaseModel):
+    """A single named tool group from config.yaml with its enabled state."""
+
+    name: str = Field(..., description="Tool group name (e.g. 'web', 'bash', 'file:read')")
+    enabled: bool = Field(default=True, description="Whether this tool group is enabled")
+
+
+class ToolGroupsListResponse(BaseModel):
+    """Response model for listing all configured tool groups."""
+
+    tool_groups: list[ToolGroupResponse]
+
+
+class ToolGroupUpdateRequest(BaseModel):
+    """Request body for updating a tool group's enabled state."""
+
+    enabled: bool = Field(..., description="Whether this tool group should be enabled")
+
+
+@router.get(
+    "/tool-groups",
+    response_model=ToolGroupsListResponse,
+    summary="List Tool Groups",
+    description="List all tool groups defined in config.yaml with their enabled state.",
+)
+async def list_tool_groups() -> ToolGroupsListResponse:
+    """Return all tool groups from the application config with their enabled state."""
+    try:
+        cfg = get_app_config()
+        ext = get_extensions_config()
+        return ToolGroupsListResponse(
+            tool_groups=[
+                ToolGroupResponse(name=g.name, enabled=ext.is_tool_group_enabled(g.name))
+                for g in cfg.tool_groups
+            ]
+        )
+    except Exception as e:
+        logger.error(f"Failed to list tool groups: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list tool groups: {str(e)}")
+
+
+@router.put(
+    "/tool-groups/{name}",
+    response_model=ToolGroupResponse,
+    summary="Update Tool Group",
+    description="Enable or disable a tool group. State is persisted to extensions_config.json.",
+)
+async def update_tool_group(name: str, request: ToolGroupUpdateRequest) -> ToolGroupResponse:
+    """Enable or disable a named tool group.
+
+    Args:
+        name: The tool group name.
+        request: The update request.
+
+    Returns:
+        The updated tool group response.
+
+    Raises:
+        HTTPException: 404 if tool group not found in config.yaml.
+    """
+    try:
+        cfg = get_app_config()
+        group_names = {g.name for g in cfg.tool_groups}
+        if name not in group_names:
+            raise HTTPException(status_code=404, detail=f"Tool group '{name}' not found")
+
+        config_path = ExtensionsConfig.resolve_config_path()
+        if config_path is None:
+            import json
+            from pathlib import Path
+            config_path = Path.cwd().parent / "extensions_config.json"
+
+        current = get_extensions_config()
+
+        import json
+        config_data = {
+            "mcpServers": {n: s.model_dump() for n, s in current.mcp_servers.items()},
+            "skills": {n: {"enabled": s.enabled} for n, s in current.skills.items()},
+            "toolGroups": {n: {"enabled": s.enabled} for n, s in current.tool_groups.items()},
+        }
+        config_data["toolGroups"][name] = {"enabled": request.enabled}
+
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=2)
+
+        reload_extensions_config()
+        return ToolGroupResponse(name=name, enabled=request.enabled)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update tool group '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update tool group: {str(e)}")
 
 
 @router.get(

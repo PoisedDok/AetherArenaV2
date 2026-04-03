@@ -52,8 +52,14 @@ class SkillStateConfig(BaseModel):
     enabled: bool = Field(default=True, description="Whether this skill is enabled")
 
 
+class ToolGroupStateConfig(BaseModel):
+    """Configuration for a single tool group's enabled state."""
+
+    enabled: bool = Field(default=True, description="Whether this tool group is enabled")
+
+
 class ExtensionsConfig(BaseModel):
-    """Unified configuration for MCP servers and skills."""
+    """Unified configuration for MCP servers, skills, and tool groups."""
 
     mcp_servers: dict[str, McpServerConfig] = Field(
         default_factory=dict,
@@ -63,6 +69,11 @@ class ExtensionsConfig(BaseModel):
     skills: dict[str, SkillStateConfig] = Field(
         default_factory=dict,
         description="Map of skill name to state configuration",
+    )
+    tool_groups: dict[str, ToolGroupStateConfig] = Field(
+        default_factory=dict,
+        description="Map of tool group name to enabled state",
+        alias="toolGroups",
     )
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -181,6 +192,20 @@ class ExtensionsConfig(BaseModel):
             Dictionary of enabled MCP servers.
         """
         return {name: config for name, config in self.mcp_servers.items() if config.enabled}
+
+    def is_tool_group_enabled(self, group_name: str) -> bool:
+        """Check if a tool group is enabled.
+
+        Args:
+            group_name: Name of the tool group
+
+        Returns:
+            True if enabled (defaults to True when not explicitly configured), False otherwise
+        """
+        group_config = self.tool_groups.get(group_name)
+        if group_config is None:
+            return True  # Default to enabled
+        return group_config.enabled
 
     def is_skill_enabled(self, skill_name: str, skill_category: str) -> bool:
         """Check if a skill is enabled.

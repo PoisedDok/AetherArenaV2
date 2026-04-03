@@ -1,6 +1,6 @@
 "use client";
 
-import { BotIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
+import { BotIcon, MessageSquareIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +27,8 @@ import { useDeleteAgent } from "@/core/agents";
 import type { Agent } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 
+import { AgentEditDialog } from "./agent-edit-dialog";
+
 interface AgentCardProps {
   agent: Agent;
 }
@@ -36,6 +38,7 @@ export function AgentCard({ agent }: AgentCardProps) {
   const router = useRouter();
   const deleteAgent = useDeleteAgent();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   function handleChat() {
     router.push(`/workspace/agents/${agent.name}/chats/new`);
@@ -61,14 +64,7 @@ export function AgentCard({ agent }: AgentCardProps) {
                 <BotIcon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <CardTitle className="truncate text-base">
-                  {agent.name}
-                </CardTitle>
-                {agent.model && (
-                  <Badge variant="secondary" className="mt-0.5 text-xs">
-                    {agent.model}
-                  </Badge>
-                )}
+                <CardTitle className="truncate text-base">{agent.name}</CardTitle>
               </div>
             </div>
           </div>
@@ -100,6 +96,15 @@ export function AgentCard({ agent }: AgentCardProps) {
             <Button
               size="icon"
               variant="ghost"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setEditOpen(true)}
+              title={t.agents.edit}
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
               onClick={() => setDeleteOpen(true)}
               title={t.agents.delete}
@@ -110,7 +115,14 @@ export function AgentCard({ agent }: AgentCardProps) {
         </CardFooter>
       </Card>
 
-      {/* Delete Confirm */}
+      {/* Edit dialog */}
+      <AgentEditDialog
+        agent={agent}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+
+      {/* Delete confirm */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>

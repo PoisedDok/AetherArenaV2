@@ -141,6 +141,31 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    // creation form
+    fieldName: string;
+    fieldNameReadonly: string;
+    fieldDescription: string;
+    fieldDescriptionPlaceholder: string;
+    fieldOptional: string;
+    fieldTools: string;
+    fieldToolsHint: string;
+    toolGroupsSection: string;
+    identityContinue: string;
+    toolsStepTitle: string;
+    toolsStepHint: string;
+    configureContinue: string;
+    // edit dialog
+    edit: string;
+    editSuccess: string;
+    editSubtitle: string;
+    editSectionOverview: string;
+    editOverviewHint: string;
+    editSectionTools: string;
+    editToolsHint: string;
+    editToolsEmpty: string;
+    editSectionSoul: string;
+    editSoulHint: string;
+    editSoulPlaceholder: string;
   };
 
   // Breadcrumb
@@ -258,6 +283,15 @@ export interface Translations {
       description: string;
       empty: string;
       rawJson: string;
+      deleteFact: string;
+      editFact: string;
+      editSection: string;
+      saveChanges: string;
+      deleteFactConfirm: string;
+      editSectionTitle: string;
+      factDeletedSuccess: string;
+      factUpdatedSuccess: string;
+      sectionUpdatedSuccess: string;
       markdown: {
         overview: string;
         userContext: string;
@@ -317,6 +351,7 @@ export interface Translations {
     tools: {
       title: string;
       description: string;
+      mcpTitle: string;
     };
     models: {
       title: string;
@@ -338,6 +373,33 @@ export interface Translations {
       visionModelTitle: string;
       visionModelDescription: string;
       visionModelNone: string;
+      // Provider UI
+      activeModel: string;
+      noneSelected: string;
+      localRunning: string;
+      localNotRunning: string;
+      localChecking: string;
+      testKey: string;
+      testKeyPlaceholder: string;
+      testKeyValid: string;
+      testKeyInvalid: string;
+      testKeyTesting: string;
+      testKeyNote: string;
+      getApiKey: string;
+      noModelsConfigured: string;
+      setAsChat: string;
+      setAsVision: string;
+      clearVision: string;
+      fetchModels: string;
+      fetchModelsLoading: string;
+      fetchModelsError: string;
+      liveModels: string;
+      liveModelsEmpty: string;
+      freeLabel: string;
+      manualModelPlaceholder: string;
+      manualModelAdd: string;
+      searchModelsPlaceholder: string;
+      keyValidLoadModels: string;
     };
     skills: {
       title: string;
