@@ -2,13 +2,16 @@
 
 import type { ChatStatus } from "ai";
 import {
+  BotIcon,
   CheckIcon,
+  CpuIcon,
   GraduationCapIcon,
   LightbulbIcon,
   PaperclipIcon,
   PlusIcon,
   SparklesIcon,
   RocketIcon,
+  WrenchIcon,
   XIcon,
   ZapIcon,
 } from "lucide-react";
@@ -51,15 +54,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { useAgents } from "@/core/agents/hooks";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
+import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
 import type { Model } from "@/core/models/types";
 import { useLocalSettings } from "@/core/settings";
+import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { AgentThreadContext } from "@/core/threads";
 import { textOfMessage } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
@@ -74,16 +88,9 @@ import {
   ModelSelectorTrigger,
 } from "../ai-elements/model-selector";
 import { Suggestion, Suggestions } from "../ai-elements/suggestion";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
-import { Tooltip } from "./tooltip";
 
 // Helper to extract a short provider tag from display_name
 function getProviderTag(displayName: string): string {
@@ -497,7 +504,12 @@ export function InputBox({
               />
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
-          <AddAttachmentsButton className="px-2!" />
+          <InputActionsMenu
+            agentName={context.agent_name as string | undefined}
+            onAgentSelect={(name) =>
+              onContextChange?.({ ...context, agent_name: name ?? undefined })
+            }
+          />
           <PromptInputActionMenu>
             <ModeHoverGuide
               mode={
@@ -784,17 +796,11 @@ export function InputBox({
             onOpenChange={setModelDialogOpen}
           >
             <ModelSelectorTrigger asChild>
-              <PromptInputButton>
-                <div className="flex min-w-0 flex-col items-start text-left">
-                  <ModelSelectorName className="text-xs font-normal">
-                    {selectedModel ? formatModelDisplay(selectedModel) : "Model"}
-                  </ModelSelectorName>
-                  {selectedModel?.display_name && (
-                    <span className="text-muted-foreground w-full truncate text-[10px] leading-none">
-                      {getProviderTag(selectedModel.display_name)}
-                    </span>
-                  )}
-                </div>
+              <PromptInputButton className="gap-1.5! px-2!">
+                <CpuIcon className="size-3 shrink-0" />
+                <span className="max-w-[96px] truncate text-xs font-normal">
+                  {selectedModel ? formatModelDisplay(selectedModel) : "Model"}
+                </span>
               </PromptInputButton>
             </ModelSelectorTrigger>
             <ModelSelectorContent>
@@ -969,17 +975,179 @@ function SuggestionList() {
   );
 }
 
-function AddAttachmentsButton({ className }: { className?: string }) {
+function InputActionsMenu({
+  agentName,
+  onAgentSelect,
+}: {
+  agentName?: string;
+  onAgentSelect?: (name: string | null) => void;
+}) {
   const { t } = useI18n();
   const attachments = usePromptInputAttachments();
+  const { agents } = useAgents();
+  const { skills } = useSkills();
+  const { mutate: enableSkill } = useEnableSkill();
+  const { config: mcpConfig } = useMCPConfig();
+  const { mutate: enableMCPServer } = useEnableMCPServer();
+  const mcpServers = mcpConfig?.mcp_servers ?? {};
+  const hasMCP = Object.keys(mcpServers).length > 0;
+  // Currently selected agent label for the trigger badge
+  const activeAgent = agentName ?? null;
+
   return (
-    <Tooltip content={t.inputBox.addAttachments}>
-      <PromptInputButton
-        className={cn("px-2!", className)}
-        onClick={() => attachments.openFileDialog()}
-      >
-        <PaperclipIcon className="size-3" />
-      </PromptInputButton>
-    </Tooltip>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <PromptInputButton className="px-2!">
+          <PlusIcon className="size-3" />
+        </PromptInputButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+
+        {/* Attach */}
+        <DropdownMenuItem onSelect={() => attachments.openFileDialog()}>
+          <PaperclipIcon className="size-4" />
+          {t.inputBox.addAttachments}
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* Agent submenu */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="gap-2">
+            <BotIcon className="size-4" />
+            <span>{t.agents.title}</span>
+            {activeAgent && (
+              <span className="ml-auto max-w-[80px] truncate text-[10px] text-muted-foreground">
+                {activeAgent}
+              </span>
+            )}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-52">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              {t.inputBox.selectAgent}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {/* Default chat agent */}
+            <DropdownMenuItem
+              onSelect={() => onAgentSelect?.(null)}
+              className="gap-2"
+            >
+              <BotIcon className="size-4 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm">{t.inputBox.defaultAgent}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {t.inputBox.defaultAgentDescription}
+                </div>
+              </div>
+              {!activeAgent && <CheckIcon className="ml-auto size-4" />}
+            </DropdownMenuItem>
+            {agents.length > 0 && <DropdownMenuSeparator />}
+            {agents.map((agent) => (
+              <DropdownMenuItem
+                key={agent.name}
+                onSelect={() => onAgentSelect?.(agent.name)}
+                className="gap-2"
+              >
+                <BotIcon className="size-4 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{agent.name}</div>
+                  {agent.description && (
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {agent.description}
+                    </div>
+                  )}
+                </div>
+                {activeAgent === agent.name && (
+                  <CheckIcon className="ml-auto size-4" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {/* Skills submenu */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="gap-2">
+            <SparklesIcon className="size-4" />
+            <span>{t.settings.skills.title}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-64">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              {t.settings.skills.title}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {skills.length === 0 ? (
+              <div className="px-2 py-3 text-center text-xs text-muted-foreground/60">
+                {t.settings.skills.emptyTitle}
+              </div>
+            ) : (
+              skills.map((skill) => (
+                <DropdownMenuItem
+                  key={skill.name}
+                  onSelect={(e) => e.preventDefault()}
+                  className="gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{skill.name}</div>
+                    {skill.description && (
+                      <div className="line-clamp-1 text-[10px] text-muted-foreground">
+                        {skill.description}
+                      </div>
+                    )}
+                  </div>
+                  <Switch
+                    checked={skill.enabled}
+                    onCheckedChange={(checked) =>
+                      enableSkill({ skillName: skill.name, enabled: checked })
+                    }
+                    className="shrink-0"
+                  />
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {/* MCP Tools submenu — only shown when servers exist */}
+        {hasMCP && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <WrenchIcon className="size-4" />
+              <span>{t.settings.tools.title}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-64">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                {t.settings.tools.title}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {Object.entries(mcpServers).map(([name, serverConfig]) => (
+                <DropdownMenuItem
+                  key={name}
+                  onSelect={(e) => e.preventDefault()}
+                  className="gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{name}</div>
+                    {serverConfig.description && (
+                      <div className="line-clamp-1 text-[10px] text-muted-foreground">
+                        {serverConfig.description}
+                      </div>
+                    )}
+                  </div>
+                  <Switch
+                    checked={serverConfig.enabled}
+                    onCheckedChange={(checked) =>
+                      enableMCPServer({ serverName: name, enabled: checked })
+                    }
+                    className="shrink-0"
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

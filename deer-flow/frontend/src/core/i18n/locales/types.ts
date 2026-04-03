@@ -79,6 +79,9 @@ export interface Translations {
     reasoningEffortHigh: string;
     reasoningEffortHighDescription: string;
     searchModels: string;
+    selectAgent: string;
+    defaultAgent: string;
+    defaultAgentDescription: string;
     surpriseMe: string;
     surpriseMePrompt: string;
     followupLoading: string;
@@ -110,6 +113,7 @@ export interface Translations {
     chats: string;
     demoChats: string;
     agents: string;
+    files: string;
   };
 
   // Agents
@@ -161,6 +165,23 @@ export interface Translations {
   // Chats
   chats: {
     searchChats: string;
+    selectAll: string;
+    deselectAll: string;
+    deleteSelected: (count: number) => string;
+    deleteSelectedConfirm: (count: number) => string;
+    cancelSelection: string;
+    selected: (count: number) => string;
+  };
+
+  // Files (artifacts across all chats)
+  files: {
+    title: string;
+    searchFiles: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    linkedChat: string;
+    allFiles: string;
+    filterByType: string;
   };
 
   // Page titles (document title)

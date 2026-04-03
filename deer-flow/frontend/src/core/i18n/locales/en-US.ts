@@ -102,6 +102,9 @@ export const enUS: Translations = {
     reasoningEffortHighDescription:
       "Full-dimensional Logic Deduction + Multi-path Verification + Backward Check",
     searchModels: "Search models...",
+    selectAgent: "Select agent",
+    defaultAgent: "Chat Agent",
+    defaultAgentDescription: "Default — main agent system",
     surpriseMe: "Surprise",
     surpriseMePrompt: "Surprise me",
     followupLoading: "Generating follow-up questions...",
@@ -168,6 +171,7 @@ export const enUS: Translations = {
     recentChats: "Recent chats",
     demoChats: "Demo chats",
     agents: "Agents",
+    files: "Files",
   },
 
   // Agents
@@ -226,6 +230,26 @@ export const enUS: Translations = {
   // Chats
   chats: {
     searchChats: "Search chats",
+    selectAll: "Select all",
+    deselectAll: "Deselect all",
+    deleteSelected: (count: number) =>
+      `Delete ${count} chat${count === 1 ? "" : "s"}`,
+    deleteSelectedConfirm: (count: number) =>
+      `Delete ${count} chat${count === 1 ? "" : "s"}? This cannot be undone.`,
+    cancelSelection: "Cancel",
+    selected: (count: number) => `${count} selected`,
+  },
+
+  // Files (artifacts across all chats)
+  files: {
+    title: "Files",
+    searchFiles: "Search files",
+    emptyTitle: "No files yet",
+    emptyDescription:
+      "Files created by the assistant across all your chats will appear here.",
+    linkedChat: "From chat",
+    allFiles: "All files",
+    filterByType: "Filter by type",
   },
 
   // Page titles (document title)
