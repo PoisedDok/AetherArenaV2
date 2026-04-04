@@ -9,6 +9,7 @@ from app.gateway.routers import (
     agents,
     artifacts,
     channels,
+    guru,
     mcp,
     memory,
     models,
@@ -176,6 +177,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Suggestions API is mounted at /api/threads/{thread_id}/suggestions
     app.include_router(suggestions.router)
+
+    # Guru companion reaction API is mounted at /api/guru
+    app.include_router(guru.router)
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)

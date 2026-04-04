@@ -1,13 +1,21 @@
 "use client";
 
-import { CheckIcon, MonitorSmartphoneIcon, MoonIcon, SunIcon } from "lucide-react";
-import { useTheme } from "next-themes";
-import { useEffect, useMemo, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { BookOpenIcon, CheckIcon, ChevronDownIcon, Loader2Icon, Volume2Icon, VolumeXIcon, ZapIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
+import { useModels } from "@/core/models/hooks";
 import { type LocalSettings, useLocalSettings } from "@/core/settings";
 import { cn } from "@/lib/utils";
 
@@ -29,9 +37,7 @@ function useDebouncedCallback<T extends (arg: string) => void>(fn: T, delay: num
 
 export function AppearanceSettingsPage() {
   const { t } = useI18n();
-  const { theme, setTheme, systemTheme } = useTheme();
   const [localSettings, setLocalSettings, settingsReady] = useLocalSettings();
-  const currentTheme = (theme ?? "system") as "system" | "light" | "dark";
 
   // Local input state for immediate typing feedback
   const [displayNameInput, setDisplayNameInput] = useState(
@@ -60,37 +66,6 @@ export function AppearanceSettingsPage() {
     debouncedSave(value);
   };
 
-  const themeOptions = useMemo(
-    () => [
-      {
-        id: "system",
-        label: t.settings.appearance.system,
-        description: t.settings.appearance.systemDescription,
-        icon: MonitorSmartphoneIcon,
-      },
-      {
-        id: "light",
-        label: t.settings.appearance.light,
-        description: t.settings.appearance.lightDescription,
-        icon: SunIcon,
-      },
-      {
-        id: "dark",
-        label: t.settings.appearance.dark,
-        description: t.settings.appearance.darkDescription,
-        icon: MoonIcon,
-      },
-    ],
-    [
-      t.settings.appearance.dark,
-      t.settings.appearance.darkDescription,
-      t.settings.appearance.light,
-      t.settings.appearance.lightDescription,
-      t.settings.appearance.system,
-      t.settings.appearance.systemDescription,
-    ],
-  );
-
   return (
     <div className="space-y-8">
       <SettingsSection
@@ -112,28 +87,6 @@ export function AppearanceSettingsPage() {
               Saved
             </span>
           )}
-        </div>
-      </SettingsSection>
-
-      <Separator />
-
-      <SettingsSection
-        title={t.settings.appearance.themeTitle}
-        description={t.settings.appearance.themeDescription}
-      >
-        <div className="grid gap-3 lg:grid-cols-3">
-          {themeOptions.map((option) => (
-            <ThemePreviewCard
-              key={option.id}
-              icon={option.icon}
-              label={option.label}
-              description={option.description}
-              active={currentTheme === option.id}
-              mode={option.id as "system" | "light" | "dark"}
-              systemTheme={systemTheme}
-              onSelect={(value) => setTheme(value)}
-            />
-          ))}
         </div>
       </SettingsSection>
 
@@ -216,91 +169,194 @@ export function AppearanceSettingsPage() {
           />
         </div>
       </SettingsSection>
+
+      <Separator />
+
+      <GuruSettingsSection
+        localSettings={localSettings}
+        setLocalSettings={setLocalSettings}
+      />
     </div>
   );
 }
 
-function ThemePreviewCard({
-  icon: Icon,
-  label,
-  description,
-  active,
-  mode,
-  systemTheme,
-  onSelect,
+// ---------------------------------------------------------------------------
+// Guru companion settings
+// ---------------------------------------------------------------------------
+
+type TestState = "idle" | "loading" | "ok" | "error";
+
+function GuruSettingsSection({
+  localSettings,
+  setLocalSettings,
 }: {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  label: string;
-  description: string;
-  active: boolean;
-  mode: "system" | "light" | "dark";
-  systemTheme?: string;
-  onSelect: (mode: "system" | "light" | "dark") => void;
+  localSettings: LocalSettings;
+  setLocalSettings: (key: keyof LocalSettings, value: Partial<LocalSettings[keyof LocalSettings]>) => void;
 }) {
-  const previewMode =
-    mode === "system" ? (systemTheme === "dark" ? "dark" : "light") : mode;
+  const { models } = useModels();
+  const selectedModel = models.find((m) => m.name === localSettings.guru.model_name);
+  const displayLabel = selectedModel
+    ? (selectedModel.display_name ?? selectedModel.name)
+    : "Auto (default)";
+
+  const [testState, setTestState] = useState<TestState>("idle");
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  async function runTest() {
+    setTestState("loading");
+    setTestResult(null);
+    try {
+      const res = await fetch(`${getBackendBaseURL()}/api/guru/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          last_ai_text:
+            "Here is a clean recursive solution using memoisation. The key insight is that each subproblem overlaps, so we cache results in a hash map to avoid recomputation.",
+          system:
+            "You are Guru, a test companion. React in 3-8 words, dry margin-note style. No emoji.",
+          model_name: localSettings.guru.model_name ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        setTestResult(`Error ${res.status}: ${text.slice(0, 120)}`);
+        setTestState("error");
+        return;
+      }
+      const data = (await res.json()) as { reaction?: string };
+      if (data.reaction) {
+        setTestResult(data.reaction);
+        setTestState("ok");
+      } else {
+        setTestResult("No reaction returned");
+        setTestState("error");
+      }
+    } catch (e) {
+      setTestResult(e instanceof Error ? e.message : "Network error");
+      setTestState("error");
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(mode)}
-      className={cn(
-        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all",
-        active
-          ? "border-primary ring-primary/30 shadow-sm ring-2"
-          : "hover:border-border hover:shadow-sm",
-      )}
+    <SettingsSection
+      title={
+        <span className="flex items-center gap-2">
+          <BookOpenIcon className="size-4" />
+          Guru Companion
+        </span>
+      }
+      description="Your ASCII companion that watches conversations and reacts. Powered by a small, fast model."
     >
-      <div className="flex items-start gap-3">
-        <div className="bg-muted rounded-md p-2">
-          <Icon className="size-4" />
-        </div>
-        <div className="space-y-1">
-          <div className="text-sm leading-none font-semibold">{label}</div>
-          <p className="text-muted-foreground text-xs leading-snug">
-            {description}
-          </p>
-        </div>
-      </div>
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-md border text-xs transition-colors",
-          previewMode === "dark"
-            ? "border-neutral-800 bg-neutral-900 text-neutral-200"
-            : "border-slate-200 bg-white text-slate-900",
-        )}
-      >
-        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
-          <div
-            className={cn(
-              "h-2 w-2 rounded-full",
-              previewMode === "dark" ? "bg-emerald-400" : "bg-emerald-500",
-            )}
+      <div className="space-y-4 max-w-md">
+        {/* Mute toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium flex items-center gap-1.5">
+              {localSettings.guru.muted ? (
+                <VolumeXIcon className="size-3.5 text-muted-foreground" />
+              ) : (
+                <Volume2Icon className="size-3.5" />
+              )}
+              Reactions
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Show Guru&apos;s speech bubble after each AI response
+            </p>
+          </div>
+          <Switch
+            checked={!localSettings.guru.muted}
+            onCheckedChange={(checked) =>
+              setLocalSettings("guru", { muted: !checked })
+            }
           />
-          <div className="h-2 w-10 rounded-full bg-current/20" />
-          <div className="h-2 w-6 rounded-full bg-current/15" />
         </div>
-        <div className="grid grid-cols-[1fr_240px] gap-3 px-3 py-3">
-          <div className="space-y-2">
-            <div className="h-3 w-3/4 rounded-full bg-current/15" />
-            <div className="h-3 w-1/2 rounded-full bg-current/10" />
-            <div className="h-[90px] rounded-md border border-current/10 bg-current/5" />
+
+        {/* Model selector + test button */}
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium">Reaction model</div>
+          <p className="text-muted-foreground text-xs">
+            The model used to generate Guru&apos;s reactions. A small fast model works best.
+          </p>
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="flex-1 justify-between font-mono text-xs h-8"
+                  disabled={models.length === 0}
+                >
+                  <span className="truncate">{displayLabel}</span>
+                  <ChevronDownIcon className="size-3.5 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-64 overflow-y-auto">
+                <DropdownMenuItem
+                  onSelect={() => setLocalSettings("guru", { model_name: null })}
+                  className={cn("text-xs font-mono gap-2", !localSettings.guru.model_name && "text-primary")}
+                >
+                  {!localSettings.guru.model_name && <CheckIcon className="size-3" />}
+                  <span className={localSettings.guru.model_name ? "pl-5" : ""}>Auto (default)</span>
+                </DropdownMenuItem>
+                {models.map((model) => {
+                  const active = localSettings.guru.model_name === model.name;
+                  return (
+                    <DropdownMenuItem
+                      key={model.name}
+                      onSelect={() => setLocalSettings("guru", { model_name: model.name })}
+                      className={cn("text-xs font-mono gap-2", active && "text-primary")}
+                    >
+                      {active ? (
+                        <CheckIcon className="size-3 shrink-0" />
+                      ) : (
+                        <span className="w-3 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{model.display_name ?? model.name}</span>
+                        {model.description && (
+                          <span className="text-muted-foreground text-[10px] truncate">{model.description}</span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-3 text-xs shrink-0"
+              disabled={testState === "loading"}
+              onClick={() => void runTest()}
+            >
+              {testState === "loading" ? (
+                <Loader2Icon className="size-3 animate-spin" />
+              ) : (
+                <ZapIcon className="size-3" />
+              )}
+              Test
+            </Button>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-md bg-current/10" />
-              <div className="space-y-2">
-                <div className="h-2 w-14 rounded-full bg-current/15" />
-                <div className="h-2 w-10 rounded-full bg-current/10" />
-              </div>
+
+          {/* Test result */}
+          {testResult && (
+            <div
+              className={cn(
+                "rounded-md border px-3 py-2 font-mono text-xs",
+                testState === "ok"
+                  ? "border-green-500/30 bg-green-500/10 text-green-400"
+                  : "border-destructive/30 bg-destructive/10 text-destructive",
+              )}
+            >
+              {testState === "ok" && (
+                <span className="text-muted-foreground mr-1.5 font-sans">Guru says:</span>
+              )}
+              {testResult}
             </div>
-            <div className="flex flex-col gap-1 rounded-md border border-dashed border-current/15 p-2">
-              <div className="h-2 w-3/5 rounded-full bg-current/15" />
-              <div className="h-2 w-2/5 rounded-full bg-current/10" />
-            </div>
-          </div>
+          )}
         </div>
       </div>
-    </button>
+    </SettingsSection>
   );
 }
 

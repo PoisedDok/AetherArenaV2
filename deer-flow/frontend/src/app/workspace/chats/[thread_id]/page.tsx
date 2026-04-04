@@ -16,6 +16,8 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
+import { getGuru } from "@/core/guru/guru";
+import { getGuruIntroContext } from "@/core/guru/prompt";
 import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings } from "@/core/settings";
@@ -62,7 +64,10 @@ export default function ChatPage() {
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      void sendMessage(threadId, message);
+      // Inject guru intro context once per session if a guru is hatched
+      const guru = getGuru();
+      const guruIntro = guru ? getGuruIntroContext(guru.name, guru.species) : null;
+      void sendMessage(threadId, message, guruIntro ?? undefined);
     },
     [sendMessage, threadId],
   );

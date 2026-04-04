@@ -69,6 +69,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useAgents } from "@/core/agents/hooks";
 import { getBackendBaseURL } from "@/core/config";
+import { setGuruMuted } from "@/core/guru/guru";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
@@ -91,6 +92,7 @@ import {
 } from "../ai-elements/model-selector";
 import { Suggestion, Suggestions } from "../ai-elements/suggestion";
 
+import { GuruWidget } from "./guru/GuruWidget";
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 
@@ -325,6 +327,31 @@ export function InputBox({
       if (!message.text) {
         return;
       }
+
+      // Intercept /guru commands before sending to the AI
+      const trimmed = message.text.trim();
+      if (trimmed.startsWith("/guru")) {
+        const sub = trimmed.slice(5).trim();
+        if (sub === "pet") {
+          window.dispatchEvent(new CustomEvent("guru:pet"));
+          return;
+        }
+        if (sub === "mute") {
+          setGuruMuted(true);
+          return;
+        }
+        if (sub === "unmute") {
+          setGuruMuted(false);
+          return;
+        }
+        if (sub === "reset") {
+          const { clearGuru } = await import("@/core/guru/guru");
+          clearGuru();
+          return;
+        }
+        // /guru stats and unrecognised subcommands fall through to AI
+      }
+
       setFollowups([]);
       setFollowupsHidden(false);
       setFollowupsLoading(false);
@@ -468,6 +495,10 @@ export function InputBox({
 
   return (
     <div ref={promptRootRef} className="relative">
+      {/* Guru companion — floats above the input, anchored bottom-right */}
+      <div className="absolute right-2 bottom-full z-20 mb-1 pointer-events-auto">
+        <GuruWidget />
+      </div>
       <PromptInput
         className={cn(
           "glass-chat-input rounded-2xl transition-all duration-300 ease-out *:data-[slot='input-group']:rounded-2xl",

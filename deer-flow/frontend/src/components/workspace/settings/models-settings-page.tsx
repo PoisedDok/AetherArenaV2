@@ -4,17 +4,16 @@ import {
   BrainCircuitIcon,
   CheckIcon,
   CpuIcon,
-  EyeIcon,
   ExternalLinkIcon,
+  EyeIcon,
   KeyIcon,
   Loader2Icon,
-  PlusIcon,
   SearchIcon,
   ServerIcon,
   SparklesIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import { useModels } from "@/core/models/hooks";
@@ -128,71 +127,90 @@ function CapBadge({ icon, label, color }: { icon: React.ReactNode; label: string
   );
 }
 
-// ── Config model row (from backend config) ────────────────────────────────────
+// ── Model row ────────────────────────────────────────────────────────────────
 
 function ModelRow({
-  model,
+  id,
+  displayName,
+  modelId,
   isChatSelected,
   isVisionSelected,
+  supportsThinking,
+  supportsReasoning,
+  supportsVision,
+  isFree,
   onSelectChat,
   onToggleVision,
   disabled,
 }: {
-  model: Model;
+  id: string;
+  displayName: string;
+  modelId: string;
   isChatSelected: boolean;
   isVisionSelected: boolean;
+  supportsThinking?: boolean;
+  supportsReasoning?: boolean;
+  supportsVision?: boolean;
+  isFree?: boolean;
   onSelectChat: () => void;
   onToggleVision: () => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
-  const displayName = model.display_name?.trim() ?? model.model;
 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-3 py-2 transition-colors",
-        isChatSelected ? "bg-primary/8" : "hover:bg-muted/40",
+        "group flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer",
+        isChatSelected
+          ? "bg-primary/8 border-l-2 border-primary"
+          : "border-l-2 border-transparent hover:bg-muted/30",
       )}
+      onClick={!disabled ? onSelectChat : undefined}
     >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onSelectChat}
-        className="flex flex-1 items-center gap-2 min-w-0 text-left"
+      <div
+        className={cn(
+          "size-4 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors",
+          isChatSelected
+            ? "border-primary bg-primary"
+            : "border-border/50 group-hover:border-primary/50",
+        )}
       >
-        <CpuIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-colors",
-            isChatSelected ? "text-primary" : "text-muted-foreground/30",
-          )}
-        />
-        <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", isChatSelected ? "text-primary" : "")}>
+        {isChatSelected && <div className="size-1.5 rounded-full bg-primary-foreground" />}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={cn("text-sm font-medium truncate", isChatSelected ? "text-primary" : "text-foreground")}>
             {displayName}
-          </p>
-          {model.model !== displayName && (
-            <p className="truncate font-mono text-[10px] text-muted-foreground/50">{model.model}</p>
+          </span>
+          {isFree && (
+            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-px text-[9px] font-semibold text-emerald-400">
+              FREE
+            </span>
           )}
         </div>
-      </button>
+        {modelId !== displayName && (
+          <p className="font-mono text-[10px] text-muted-foreground/50 truncate">{modelId}</p>
+        )}
+      </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        {model.supports_thinking && (
+      <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        {supportsThinking && (
           <CapBadge
             icon={<BrainCircuitIcon className="size-2.5" />}
             label={t.settings.models.capabilitiesThinking}
             color="border-violet-500/20 bg-violet-500/10 text-violet-400"
           />
         )}
-        {model.supports_reasoning_effort && (
+        {supportsReasoning && (
           <CapBadge
             icon={<BrainCircuitIcon className="size-2.5" />}
             label={t.settings.models.capabilitiesReasoning}
             color="border-amber-500/20 bg-amber-500/10 text-amber-400"
           />
         )}
-        {model.supports_vision && (
+        {supportsVision && (
           <button
             type="button"
             disabled={disabled}
@@ -211,97 +229,197 @@ function ModelRow({
   );
 }
 
-// ── Live model row (from provider API) ───────────────────────────────────────
+// ── Provider selector button group ────────────────────────────────────────────
 
-function LiveModelRow({
-  model,
-  isChatSelected,
-  isVisionSelected,
-  onSelectChat,
-  onToggleVision,
-  disabled,
+function ProviderSelector({
+  providers,
+  selectedId,
+  health,
+  healthLoading,
+  onChange,
 }: {
-  model: ProviderModel;
-  isChatSelected: boolean;
-  isVisionSelected: boolean;
-  onSelectChat: () => void;
-  onToggleVision: () => void;
-  disabled: boolean;
+  providers: ProviderDefinition[];
+  selectedId: string;
+  health: Record<string, { reachable: boolean }> | undefined;
+  healthLoading: boolean;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {providers.map((p) => {
+        const isActive = p.id === selectedId;
+        const isLocal = p.kind === "local";
+        const reachable = isLocal ? health?.[p.id]?.reachable : undefined;
+
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onChange(p.id)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all",
+              isActive
+                ? "border-primary bg-primary/10 text-primary shadow-sm"
+                : "border-border/40 bg-muted/20 text-muted-foreground hover:border-border hover:bg-muted/40 hover:text-foreground",
+            )}
+          >
+            <ServerIcon className="size-3.5 shrink-0" />
+            <span>{p.displayName}</span>
+            {isLocal && (
+              healthLoading ? (
+                <Loader2Icon className="size-2.5 animate-spin opacity-50" />
+              ) : reachable ? (
+                <span className="size-1.5 rounded-full bg-emerald-400" />
+              ) : (
+                <span className="size-1.5 rounded-full bg-muted-foreground/30" />
+              )
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── API key section (cloud providers) ────────────────────────────────────────
+
+function ApiKeySection({
+  providerId,
+  docUrl,
+  onKeyValidated,
+}: {
+  providerId: string;
+  docUrl?: string;
+  onKeyValidated: (key: string) => void;
 }) {
   const { t } = useI18n();
+  const [key, setKey] = useState(() => loadSavedKey(providerId));
+  const [showKey, setShowKey] = useState(false);
+  const { mutate: testKey, isPending: isTesting, data: testResult, reset: resetTest } = useTestProviderKey();
+
+  // Auto-load key on provider change
+  useEffect(() => {
+    const saved = loadSavedKey(providerId);
+    setKey(saved);
+    resetTest();
+    if (saved) onKeyValidated(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
+  const handleTest = () => {
+    if (!key.trim()) return;
+    resetTest();
+    testKey(
+      { provider: providerId, api_key: key.trim() },
+      {
+        onSuccess: (result) => {
+          if (result.valid) {
+            saveKey(providerId, key.trim());
+            onKeyValidated(key.trim());
+          }
+        },
+      },
+    );
+  };
+
+  const handleChange = (v: string) => {
+    setKey(v);
+    if (testResult) resetTest();
+  };
+
+  const isValid = testResult?.valid === true;
+  const isInvalid = testResult?.valid === false;
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 px-3 py-1.5 transition-colors",
-        isChatSelected ? "bg-primary/8" : "hover:bg-muted/40",
-      )}
-    >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onSelectChat}
-        className="flex flex-1 items-center gap-2 min-w-0 text-left"
-      >
-        <CpuIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-colors",
-            isChatSelected ? "text-primary" : "text-muted-foreground/30",
-          )}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <p className={cn("truncate text-sm font-medium", isChatSelected ? "text-primary" : "")}>
-              {model.name}
-            </p>
-            {model.is_free && (
-              <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-px text-[9px] font-semibold text-emerald-400">
-                {t.settings.models.freeLabel}
-              </span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <KeyIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+          <input
+            type={showKey ? "text" : "password"}
+            value={key}
+            onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleTest()}
+            placeholder={t.settings.models.testKeyPlaceholder}
+            className={cn(
+              "w-full rounded-lg border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors",
+              isValid ? "border-emerald-500/50" : isInvalid ? "border-red-500/50" : "border-border/50",
             )}
-          </div>
-          {model.id !== model.name && (
-            <p className="truncate font-mono text-[10px] text-muted-foreground/50">{model.id}</p>
-          )}
-        </div>
-      </button>
-
-      <div className="flex shrink-0 items-center gap-1">
-        {model.supports_thinking && (
-          <CapBadge
-            icon={<BrainCircuitIcon className="size-2.5" />}
-            label={t.settings.models.capabilitiesThinking}
-            color="border-violet-500/20 bg-violet-500/10 text-violet-400"
           />
-        )}
-        {model.supports_vision && (
           <button
             type="button"
-            disabled={disabled}
-            title={isVisionSelected ? t.settings.models.clearVision : t.settings.models.setAsVision}
-            onClick={onToggleVision}
-            className={cn(
-              "rounded p-0.5 transition-colors",
-              isVisionSelected ? "text-blue-400" : "text-muted-foreground/25 hover:text-blue-400/60",
-            )}
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           >
-            <EyeIcon className="size-3.5" />
+            {showKey ? "hide" : "show"}
           </button>
-        )}
+        </div>
+        <button
+          type="button"
+          disabled={!key.trim() || isTesting}
+          onClick={handleTest}
+          className="shrink-0 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-40"
+        >
+          {isTesting ? (
+            <span className="flex items-center gap-1.5">
+              <Loader2Icon className="size-3.5 animate-spin" />
+              Validating
+            </span>
+          ) : (
+            "Validate"
+          )}
+        </button>
       </div>
+
+      {testResult && (
+        <div className={cn("flex items-center gap-1.5 text-xs", isValid ? "text-emerald-400" : "text-red-400")}>
+          {isValid ? <CheckIcon className="size-3.5" /> : <XCircleIcon className="size-3.5" />}
+          <span>
+            {isValid
+              ? t.settings.models.testKeyValid
+              : `${t.settings.models.testKeyInvalid}${testResult.error ? `: ${testResult.error}` : ""}`}
+          </span>
+        </div>
+      )}
+
+      <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+        {t.settings.models.testKeyNote}
+        {docUrl && (
+          <>
+            {" "}
+            <a
+              href={docUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-primary/70 hover:text-primary"
+            >
+              {t.settings.models.getApiKey}
+              <ExternalLinkIcon className="size-2.5" />
+            </a>
+          </>
+        )}
+      </p>
     </div>
   );
 }
 
-// ── OpenRouter browser ────────────────────────────────────────────────────────
+// ── Model list panel ──────────────────────────────────────────────────────────
 
-function OpenRouterBrowser({
+function ModelListPanel({
+  def,
+  configModels,
+  apiKey,
+  isReachable,
   selectedChatName,
   selectedVisionName,
   onRequestSelect,
   onRequestVision,
   disabled,
 }: {
+  def: ProviderDefinition;
+  configModels: Model[];
+  apiKey: string;
+  isReachable: boolean | undefined;
   selectedChatName: string | undefined;
   selectedVisionName: string | undefined;
   onRequestSelect: (id: string, name: string) => void;
@@ -311,513 +429,186 @@ function OpenRouterBrowser({
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [showFreeOnly, setShowFreeOnly] = useState(false);
-  const { data, isLoading, error } = useOpenRouterModels(true);
+
+  const isOpenRouter = def.id === "openrouter";
+  const isCloud = def.kind === "cloud";
+  const isLocal = def.kind === "local";
+
+  // Single mutation for both cloud and local live model fetching
+  const { mutate: fetchModels, isPending: isFetching, data: modelsResult, reset: resetModels } = useFetchProviderModels();
+
+  // Track what we last fetched to avoid duplicate calls
+  const lastFetchKey = useRef<string>("");
+
+  useEffect(() => {
+    if (isOpenRouter) return;
+
+    if (isCloud && apiKey) {
+      const key = `cloud:${def.id}:${apiKey}`;
+      if (lastFetchKey.current === key) return;
+      lastFetchKey.current = key;
+      resetModels();
+      fetchModels({ provider: def.id, api_key: apiKey });
+      return;
+    }
+
+    if (isLocal && isReachable === true) {
+      const key = `local:${def.id}`;
+      if (lastFetchKey.current === key) return;
+      lastFetchKey.current = key;
+      resetModels();
+      fetchModels({ provider: def.id, api_key: "" });
+      return;
+    }
+
+    // Provider changed or key removed — clear previous results
+    if (lastFetchKey.current !== "") {
+      lastFetchKey.current = "";
+      resetModels();
+    }
+  }, [def.id, isCloud, isLocal, isOpenRouter, apiKey, isReachable, fetchModels, resetModels]);
+
+  // OpenRouter models
+  const { data: openRouterData, isLoading: isLoadingOR } = useOpenRouterModels(isOpenRouter);
+
+  const liveModels: ProviderModel[] = useMemo(() => {
+    if (isOpenRouter) return openRouterData?.models ?? [];
+    return modelsResult?.models ?? [];
+  }, [isOpenRouter, openRouterData?.models, modelsResult?.models]);
+
+  const allModels = useMemo(() => {
+    type ModelEntry = { id: string; displayName: string; modelId: string; supportsThinking?: boolean; supportsReasoning?: boolean; supportsVision?: boolean; isFree?: boolean };
+    const result: ModelEntry[] = [];
+
+    // Index live models by ID so we can merge their capabilities into config entries
+    const liveById = new Map(liveModels.map((m) => [m.id, m]));
+
+    // Config models take priority — index by their underlying model ID for dedup
+    const configModelIds = new Set<string>();
+    for (const m of configModels) {
+      configModelIds.add(m.model); // m.model is the actual model ID (e.g. "mistralai/ministral-3-3b")
+      const live = liveById.get(m.model);
+      result.push({
+        id: m.name,
+        displayName: m.display_name?.trim() ?? m.model,
+        modelId: m.model,
+        supportsThinking: m.supports_thinking || (live?.supports_thinking ?? false),
+        supportsReasoning: m.supports_reasoning_effort,
+        // Live model data is authoritative for vision — LM Studio /api/v0/models knows better than static config
+        supportsVision: m.supports_vision || (live?.supports_vision ?? false),
+      });
+    }
+
+    // Live models — skip any whose ID matches a config model's underlying model ID
+    for (const m of liveModels) {
+      if (configModelIds.has(m.id)) continue;
+      result.push({
+        id: m.id,
+        displayName: m.name,
+        modelId: m.id,
+        supportsThinking: m.supports_thinking,
+        supportsVision: m.supports_vision,
+        isFree: m.is_free,
+      });
+    }
+
+    return result;
+  }, [configModels, liveModels]);
 
   const filtered = useMemo(() => {
-    if (!data?.models) return [];
-    return data.models.filter((m) => {
-      if (showFreeOnly && !m.is_free) return false;
+    return allModels.filter((m) => {
+      if (showFreeOnly && !m.isFree) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
-      return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q);
+      return m.id.toLowerCase().includes(q) || m.displayName.toLowerCase().includes(q);
     });
-  }, [data?.models, search, showFreeOnly]);
+  }, [allModels, search, showFreeOnly]);
+
+  const isLoading = isFetching || isLoadingOR;
+  const needsKey = isCloud && !isOpenRouter && !apiKey;
+  const needsLocal = def.kind === "local" && isReachable === false;
 
   return (
-    <div className="border-t border-border/30">
-      {/* Search bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/20">
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t.settings.models.searchModelsPlaceholder}
-            className="w-full rounded border border-border/40 bg-muted/20 pl-6 pr-2 py-1 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowFreeOnly(!showFreeOnly)}
-          className={cn(
-            "shrink-0 rounded border px-2 py-1 text-[10px] font-semibold transition-colors",
-            showFreeOnly
-              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
-              : "border-border/40 bg-muted/20 text-muted-foreground/50 hover:text-muted-foreground",
-          )}
-        >
-          {t.settings.models.freeLabel}
-        </button>
-      </div>
-
-      {/* Model list */}
-      <div className="max-h-72 overflow-y-auto divide-y divide-border/10">
-        {isLoading ? (
-          <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
-            <Loader2Icon className="size-3.5 animate-spin" />
-            {t.settings.models.fetchModelsLoading}
-          </div>
-        ) : error ? (
-          <p className="px-3 py-3 text-xs text-red-400">{t.settings.models.fetchModelsError}</p>
-        ) : filtered.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-muted-foreground/50 italic">{t.settings.models.liveModelsEmpty}</p>
-        ) : (
-          filtered.map((m) => (
-            <LiveModelRow
-              key={m.id}
-              model={m}
-              isChatSelected={m.id === selectedChatName}
-              isVisionSelected={m.id === selectedVisionName}
-              onSelectChat={() => onRequestSelect(m.id, m.name)}
-              onToggleVision={() => onRequestVision(m.id, m.name)}
-              disabled={disabled}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Cloud provider key + live models ─────────────────────────────────────────
-
-function CloudKeySection({
-  providerId,
-  docUrl,
-  isOpenRouter,
-  selectedChatName,
-  selectedVisionName,
-  onRequestSelect,
-  onRequestVision,
-  disabled,
-}: {
-  providerId: string;
-  docUrl?: string;
-  isOpenRouter: boolean;
-  selectedChatName: string | undefined;
-  selectedVisionName: string | undefined;
-  onRequestSelect: (id: string, name: string) => void;
-  onRequestVision: (id: string, name: string) => void;
-  disabled: boolean;
-}) {
-  const { t } = useI18n();
-  const [key, setKey] = useState(() => loadSavedKey(providerId));
-  const { mutate: testKey, isPending: isTesting, data: testResult, reset: resetTest } = useTestProviderKey();
-  const { mutate: fetchModels, isPending: isFetching, data: modelsResult, reset: resetModels } = useFetchProviderModels();
-  const [search, setSearch] = useState("");
-
-  const handleTest = () => {
-    if (!key.trim()) return;
-    resetModels();
-    testKey(
-      { provider: providerId, api_key: key.trim() },
-      {
-        onSuccess: (result) => {
-          if (result.valid) {
-            saveKey(providerId, key.trim()); // persist on successful validation
-            fetchModels({ provider: providerId, api_key: key.trim() });
-          }
-        },
-      },
-    );
-  };
-
-  const handleKeyChange = (v: string) => {
-    setKey(v);
-    if (testResult) { resetTest(); resetModels(); }
-  };
-
-  const liveModels = useMemo(() => modelsResult?.models ?? [], [modelsResult?.models]);
-
-  const filteredModels = useMemo(() => {
-    if (!search.trim()) return liveModels;
-    const q = search.toLowerCase();
-    return liveModels.filter((m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q));
-  }, [liveModels, search]);
-
-  return (
-    <div className="border-t border-border/30">
-      {/* Key input row */}
-      <div className="px-3 py-2.5 space-y-2">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col min-h-0 flex-1">
+      {/* Search + filters */}
+      {(allModels.length > 6 || isOpenRouter) && (
+        <div className="flex items-center gap-2 px-1 pb-3">
           <div className="relative flex-1">
-            <KeyIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
             <input
-              type="password"
-              value={key}
-              onChange={(e) => handleKeyChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleTest()}
-              placeholder={t.settings.models.testKeyPlaceholder}
-              className="w-full rounded-md border border-border/50 bg-muted/20 pl-7 pr-3 py-1.5 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.settings.models.searchModelsPlaceholder}
+              className="w-full rounded-lg border border-border/40 bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <button
-            type="button"
-            disabled={!key.trim() || isTesting || isFetching}
-            onClick={handleTest}
-            className="shrink-0 rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted/60 disabled:opacity-40"
-          >
-            {isTesting || isFetching ? (
-              <span className="flex items-center gap-1">
-                <Loader2Icon className="size-3 animate-spin" />
-                {isTesting ? t.settings.models.testKeyTesting : t.settings.models.fetchModelsLoading}
-              </span>
-            ) : (
-              t.settings.models.testKey
-            )}
-          </button>
-        </div>
-
-        {/* Test result */}
-        {testResult && (
-          <div className={cn("flex items-center gap-1.5 text-xs", testResult.valid ? "text-emerald-400" : "text-red-400")}>
-            {testResult.valid ? <CheckIcon className="size-3.5" /> : <XCircleIcon className="size-3.5" />}
-            <span>
-              {testResult.valid
-                ? (liveModels.length > 0
-                    ? `${t.settings.models.keyValidLoadModels} (${liveModels.length})`
-                    : t.settings.models.testKeyValid)
-                : `${t.settings.models.testKeyInvalid}${testResult.error ? `: ${testResult.error}` : ""}`}
-            </span>
-          </div>
-        )}
-
-        <p className="text-[10px] text-muted-foreground/50 leading-relaxed">
-          {t.settings.models.testKeyNote}
-          {docUrl && (
-            <>
-              {" "}
-              <a
-                href={docUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 text-primary/70 hover:text-primary"
-              >
-                {t.settings.models.getApiKey}
-                <ExternalLinkIcon className="size-2.5" />
-              </a>
-            </>
+          {isOpenRouter && (
+            <button
+              type="button"
+              onClick={() => setShowFreeOnly(!showFreeOnly)}
+              className={cn(
+                "shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors",
+                showFreeOnly
+                  ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
+                  : "border-border/40 bg-muted/20 text-muted-foreground/60 hover:text-muted-foreground",
+              )}
+            >
+              Free only
+            </button>
           )}
-        </p>
-      </div>
-
-      {/* Live models from this provider after key validated */}
-      {liveModels.length > 0 && !isOpenRouter && (
-        <div className="border-t border-border/20">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/15">
-            <SparklesIcon className="size-3 text-primary/60" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              {t.settings.models.liveModels}
-            </span>
-            {liveModels.length > 8 && (
-              <div className="relative flex-1 ml-auto max-w-40">
-                <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 size-2.5 text-muted-foreground/40" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t.settings.models.searchModelsPlaceholder}
-                  className="w-full rounded border border-border/30 bg-muted/20 pl-5 pr-2 py-0.5 text-[10px] placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                />
-              </div>
-            )}
-          </div>
-          <div className="max-h-56 overflow-y-auto divide-y divide-border/10">
-            {filteredModels.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-muted-foreground/50 italic">{t.settings.models.liveModelsEmpty}</p>
-            ) : (
-              filteredModels.map((m) => (
-                <LiveModelRow
-                  key={m.id}
-                  model={m}
-                  isChatSelected={m.id === selectedChatName}
-                  isVisionSelected={m.id === selectedVisionName}
-                  onSelectChat={() => onRequestSelect(m.id, m.name)}
-                  onToggleVision={() => onRequestVision(m.id, m.name)}
-                  disabled={disabled}
-                />
-              ))
-            )}
-          </div>
         </div>
       )}
 
-      {modelsResult?.error && (
-        <p className="px-3 py-2 text-[10px] text-red-400">{t.settings.models.fetchModelsError}: {modelsResult.error}</p>
-      )}
-    </div>
-  );
-}
-
-// ── Manual model input ────────────────────────────────────────────────────────
-
-function ManualModelInput({
-  onSelectChat,
-  disabled,
-}: {
-  onSelectChat: (id: string) => void;
-  disabled: boolean;
-}) {
-  const { t } = useI18n();
-  const [value, setValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleAdd = () => {
-    const id = value.trim();
-    if (!id) return;
-    onSelectChat(id);
-    setValue("");
-  };
-
-  return (
-    <div className="border-t border-border/20 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <PlusIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder={t.settings.models.manualModelPlaceholder}
-            disabled={disabled}
-            className="w-full rounded-md border border-border/40 bg-muted/20 pl-7 pr-3 py-1.5 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-40"
-          />
+      {/* States */}
+      {needsKey ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+          <KeyIcon className="size-8 text-muted-foreground/20" />
+          <p className="text-sm text-muted-foreground/60">Enter and validate your API key above to see available models</p>
         </div>
-        <button
-          type="button"
-          disabled={!value.trim() || disabled}
-          onClick={handleAdd}
-          className="shrink-0 rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-primary/20 hover:border-primary/40 hover:text-primary disabled:opacity-40"
-        >
-          {t.settings.models.manualModelAdd}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Local provider section ────────────────────────────────────────────────────
-
-function LocalProviderSection({
-  providerId,
-  isReachable,
-  localUrl: _localUrl,
-  selectedChatName,
-  selectedVisionName,
-  onRequestSelect,
-  onRequestVision,
-  disabled,
-}: {
-  providerId: string;
-  isReachable: boolean | undefined;
-  localUrl: string;
-  selectedChatName: string | undefined;
-  selectedVisionName: string | undefined;
-  onRequestSelect: (id: string, name: string) => void;
-  onRequestVision: (id: string, name: string) => void;
-  disabled: boolean;
-}) {
-  const { t } = useI18n();
-  const { mutate: fetchModels, isPending, data: modelsResult } = useFetchProviderModels();
-  const [fetched, setFetched] = useState(false);
-
-  // Auto-fetch when provider becomes reachable
-  const handleFetch = () => {
-    setFetched(true);
-    fetchModels({ provider: providerId, api_key: "" });
-  };
-
-  const liveModels = modelsResult?.models ?? [];
-
-  if (!isReachable) return null;
-
-  return (
-    <div className="border-t border-border/30">
-      {!fetched ? (
-        <div className="px-3 py-2">
-          <button
-            type="button"
-            onClick={handleFetch}
-            disabled={disabled}
-            className="flex items-center gap-1.5 text-xs text-primary/70 hover:text-primary transition-colors"
-          >
-            <SparklesIcon className="size-3" />
-            {t.settings.models.fetchModels}
-          </button>
+      ) : needsLocal ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+          <ServerIcon className="size-8 text-muted-foreground/20" />
+          <p className="text-sm text-muted-foreground/60">Start {def.displayName} to see available models</p>
+          {def.docUrl && (
+            <a href={def.docUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary">
+              Get started <ExternalLinkIcon className="size-3" />
+            </a>
+          )}
         </div>
-      ) : isPending ? (
-        <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-          <Loader2Icon className="size-3.5 animate-spin" />
+      ) : isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2Icon className="size-4 animate-spin" />
           {t.settings.models.fetchModelsLoading}
         </div>
-      ) : modelsResult?.error ? (
-        <p className="px-3 py-2 text-xs text-red-400">{t.settings.models.fetchModelsError}</p>
-      ) : liveModels.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground/50 italic">{t.settings.models.liveModelsEmpty}</p>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 gap-1.5">
+          <CpuIcon className="size-8 text-muted-foreground/20" />
+          <p className="text-sm text-muted-foreground/50 italic">
+            {search || showFreeOnly ? t.settings.models.liveModelsEmpty : "No models configured"}
+          </p>
+        </div>
       ) : (
-        <div className="divide-y divide-border/10 max-h-56 overflow-y-auto">
-          {liveModels.map((m) => (
-            <LiveModelRow
+        <div className="rounded-lg border border-border/30 bg-background overflow-hidden divide-y divide-border/20">
+          {filtered.map((m) => (
+            <ModelRow
               key={m.id}
-              model={m}
+              id={m.id}
+              displayName={m.displayName}
+              modelId={m.modelId}
               isChatSelected={m.id === selectedChatName}
               isVisionSelected={m.id === selectedVisionName}
-              onSelectChat={() => onRequestSelect(m.id, m.name)}
-              onToggleVision={() => onRequestVision(m.id, m.name)}
+              supportsThinking={m.supportsThinking}
+              supportsReasoning={m.supportsReasoning}
+              supportsVision={m.supportsVision}
+              isFree={m.isFree}
+              onSelectChat={() => onRequestSelect(m.id, m.displayName)}
+              onToggleVision={() => onRequestVision(m.id, m.displayName)}
               disabled={disabled}
             />
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Provider card ─────────────────────────────────────────────────────────────
-
-function ProviderCard({
-  def,
-  configModels,
-  isReachable,
-  isHealthLoading,
-  selectedChatName,
-  selectedVisionName,
-  onRequestSelect,
-  onRequestVision,
-  disabled,
-}: {
-  def: ProviderDefinition;
-  configModels: Model[];
-  isReachable: boolean | undefined;
-  isHealthLoading: boolean;
-  selectedChatName: string | undefined;
-  selectedVisionName: string | undefined;
-  onRequestSelect: (modelId: string, modelName: string, providerName: string) => void;
-  onRequestVision: (modelId: string, modelName: string, providerName: string) => void;
-  disabled: boolean;
-}) {
-  const { t } = useI18n();
-
-  const hasActiveConfigModel = configModels.some((m) => m.name === selectedChatName);
-  const isOpenRouter = def.id === "openrouter";
-
-  const statusDot = def.kind === "local" ? (
-    isHealthLoading ? (
-      <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
-        <Loader2Icon className="size-2.5 animate-spin" />
-        {t.settings.models.localChecking}
-      </span>
-    ) : isReachable ? (
-      <span className="flex items-center gap-1 text-[10px] text-emerald-400">
-        <span className="size-1.5 rounded-full bg-emerald-400" />
-        {t.settings.models.localRunning}
-      </span>
-    ) : (
-      <span className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-        <span className="size-1.5 rounded-full bg-muted-foreground/30" />
-        {t.settings.models.localNotRunning}
-      </span>
-    )
-  ) : null;
-
-  const isUnavailableLocal = def.kind === "local" && isReachable === false;
-
-  return (
-    <div
-      className={cn(
-        "rounded-xl border transition-colors overflow-hidden",
-        hasActiveConfigModel
-          ? "border-primary/30 bg-primary/5"
-          : "border-border/40 bg-muted/10",
-        isUnavailableLocal && "opacity-60",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <ServerIcon className={cn("size-4 shrink-0", hasActiveConfigModel ? "text-primary" : "text-muted-foreground/40")} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold">{def.displayName}</span>
-            {hasActiveConfigModel && (
-              <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
-                Active
-              </span>
-            )}
-            {statusDot}
-          </div>
-          <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{def.description}</p>
-        </div>
-        {configModels.length > 0 && (
-          <span className="shrink-0 text-[10px] text-muted-foreground/40">
-            {configModels.length} configured
-          </span>
-        )}
-      </div>
-
-      {/* Config models (from backend config) */}
-      {configModels.length > 0 && (
-        <div className="border-t border-border/30 divide-y divide-border/20">
-          {configModels.map((m) => (
-            <ModelRow
-              key={m.name}
-              model={m}
-              isChatSelected={m.name === selectedChatName}
-              isVisionSelected={m.name === selectedVisionName}
-              onSelectChat={() => onRequestSelect(m.name, m.display_name?.trim() ?? m.model, def.displayName)}
-              onToggleVision={() => onRequestVision(m.name, m.display_name?.trim() ?? m.model, def.displayName)}
-              disabled={disabled}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Local provider: live model fetch when running */}
-      {def.kind === "local" && def.localUrl && (
-        <LocalProviderSection
-          providerId={def.id}
-          isReachable={isReachable}
-          localUrl={def.localUrl}
-          selectedChatName={selectedChatName}
-          selectedVisionName={selectedVisionName}
-          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
-          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
-          disabled={disabled}
-        />
-      )}
-
-      {/* Cloud provider: key test + live models */}
-      {def.kind === "cloud" && (
-        <CloudKeySection
-          providerId={def.id}
-          docUrl={def.docUrl}
-          isOpenRouter={isOpenRouter}
-          selectedChatName={selectedChatName}
-          selectedVisionName={selectedVisionName}
-          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
-          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
-          disabled={disabled}
-        />
-      )}
-
-      {/* OpenRouter: always-visible searchable catalog */}
-      {isOpenRouter && (
-        <OpenRouterBrowser
-          selectedChatName={selectedChatName}
-          selectedVisionName={selectedVisionName}
-          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
-          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
-          disabled={disabled}
-        />
-      )}
-
-      {/* Manual model input — always shown at bottom of each provider */}
-      <ManualModelInput
-        onSelectChat={(id) => onRequestSelect(id, id, def.displayName)}
-        disabled={disabled}
-      />
     </div>
   );
 }
@@ -831,6 +622,8 @@ export function ModelsSettingsPage() {
   const [localSettings, setLocalSettings] = useLocalSettings();
   const demo = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true";
   const [pending, setPending] = useState<PendingSelection | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<string>(PROVIDER_DEFINITIONS[0]?.id ?? "");
+  const [validatedKey, setValidatedKey] = useState<string>("");
 
   const selectedChatName: string | undefined =
     typeof localSettings.context.model_name === "string" &&
@@ -844,15 +637,28 @@ export function ModelsSettingsPage() {
       ? localSettings.context.vision_model_name
       : undefined;
 
-  // Called by any row — shows confirm dialog before applying
+  // Pre-select provider of currently active model
+  useEffect(() => {
+    if (!selectedChatName || !models.length) return;
+    const m = models.find((x) => x.name === selectedChatName);
+    if (!m) return;
+    const pid = matchProviderForModel(m.provider_use, m.endpoint_url);
+    if (pid) setActiveProviderId(pid);
+  }, [selectedChatName, models]);
+
+  // When provider changes, load saved key
+  useEffect(() => {
+    const saved = loadSavedKey(activeProviderId);
+    setValidatedKey(saved);
+  }, [activeProviderId]);
+
   const requestSelectChat = useCallback((modelId: string, modelName: string, providerName: string) => {
-    if (modelId === selectedChatName) return; // already selected
+    if (modelId === selectedChatName) return;
     setPending({ modelId, modelName, kind: "chat", providerName });
   }, [selectedChatName]);
 
   const requestToggleVision = useCallback((modelId: string, modelName: string, providerName: string) => {
     if (modelId === selectedVisionName) {
-      // deselect immediately — no confirm needed to clear
       setLocalSettings("context", { vision_model_name: undefined });
       return;
     }
@@ -869,7 +675,6 @@ export function ModelsSettingsPage() {
     setPending(null);
   }, [pending, setLocalSettings]);
 
-
   const modelsByProvider = useMemo(() => {
     const map = new Map<string, Model[]>();
     for (const m of models) {
@@ -881,109 +686,129 @@ export function ModelsSettingsPage() {
     return map;
   }, [models]);
 
+  const activeDef = PROVIDER_DEFINITIONS.find((p) => p.id === activeProviderId) ?? PROVIDER_DEFINITIONS[0];
   const selectedChatModel = models.find((m) => m.name === selectedChatName);
   const selectedVisionModel = models.find((m) => m.name === selectedVisionName);
 
+  const health = healthData?.providers as Record<string, { reachable: boolean }> | undefined;
+  const activeHealth = activeDef?.kind === "local" ? health?.[activeProviderId]?.reachable : undefined;
+
   return (
     <>
-    {pending && (
-      <ConfirmDialog
-        pending={pending}
-        onConfirm={confirmSelection}
-        onCancel={() => setPending(null)}
-      />
-    )}
-    <SettingsSection
-      title={t.settings.models.title}
-      description={t.settings.models.description}
-    >
-      {/* Active model summary */}
-      <div className="mb-4 rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5 flex items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-            {t.settings.models.activeModel}
-          </p>
-          {selectedChatModel ? (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-sm font-medium truncate">
-                {selectedChatModel.display_name?.trim() ?? selectedChatModel.model}
-              </span>
-              {selectedChatModel.supports_thinking && (
-                <BrainCircuitIcon className="size-3 text-violet-400" />
-              )}
-              {selectedChatModel.supports_vision && (
-                <EyeIcon className="size-3 text-blue-400" />
-              )}
+      {pending && (
+        <ConfirmDialog
+          pending={pending}
+          onConfirm={confirmSelection}
+          onCancel={() => setPending(null)}
+        />
+      )}
+      <SettingsSection
+        title={t.settings.models.title}
+        description={t.settings.models.description}
+      >
+        {/* Active model summary bar */}
+        <div className="flex items-center gap-4 rounded-xl border border-border/30 bg-muted/10 px-4 py-3 mb-6">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">
+              {t.settings.models.activeModel}
+            </p>
+            {selectedChatModel ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold truncate">
+                  {selectedChatModel.display_name?.trim() ?? selectedChatModel.model}
+                </span>
+                {selectedChatModel.supports_thinking && <BrainCircuitIcon className="size-3.5 text-violet-400 shrink-0" />}
+                {selectedChatModel.supports_vision && <EyeIcon className="size-3.5 text-blue-400 shrink-0" />}
+              </div>
+            ) : selectedChatName ? (
+              <div className="flex items-center gap-1.5">
+                <CpuIcon className="size-3.5 text-primary/60" />
+                <span className="text-sm font-semibold text-primary/80 truncate">{selectedChatName}</span>
+              </div>
+            ) : (
+              <p className="text-sm italic text-muted-foreground/50">{t.settings.models.noneSelected}</p>
+            )}
+          </div>
+          {(selectedVisionModel || selectedVisionName) && selectedVisionName !== selectedChatName && (
+            <div className="shrink-0 border-l border-border/30 pl-4 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">
+                {t.settings.models.visionModelTitle}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <EyeIcon className="size-3.5 text-blue-400 shrink-0" />
+                <span className="text-sm font-semibold truncate">
+                  {selectedVisionModel?.display_name?.trim() ?? selectedVisionModel?.model ?? selectedVisionName}
+                </span>
+              </div>
             </div>
-          ) : selectedChatName ? (
-            <div className="flex items-center gap-1.5">
-              <CpuIcon className="size-3 text-primary/60" />
-              <span className="text-sm font-medium text-primary/80 truncate">{selectedChatName}</span>
-            </div>
-          ) : (
-            <p className="text-sm italic text-muted-foreground">{t.settings.models.noneSelected}</p>
           )}
         </div>
-        {selectedVisionModel && selectedVisionModel.name !== selectedChatName && (
-          <div className="shrink-0 border-l border-border/30 pl-4 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-              {t.settings.models.visionModelTitle}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <EyeIcon className="size-3 text-blue-400 shrink-0" />
-              <span className="text-sm font-medium truncate">
-                {selectedVisionModel.display_name?.trim() ?? selectedVisionModel.model}
-              </span>
-            </div>
-          </div>
-        )}
-        {selectedVisionName && !selectedVisionModel && selectedVisionName !== selectedChatName && (
-          <div className="shrink-0 border-l border-border/30 pl-4 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-              {t.settings.models.visionModelTitle}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <EyeIcon className="size-3 text-blue-400 shrink-0" />
-              <span className="text-sm font-medium truncate">{selectedVisionName}</span>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-          <Loader2Icon className="size-4 animate-spin" />
-          {t.common.loading}
-        </div>
-      ) : error ? (
-        <p className="py-4 text-sm text-destructive">
-          {t.settings.models.loadError}: {error.message}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {PROVIDER_DEFINITIONS.map((def) => {
-            const providerModels = modelsByProvider.get(def.id) ?? [];
-            const health = healthData?.providers[def.id];
-            const isReachable = def.kind === "local" ? health?.reachable : undefined;
-
-            return (
-              <ProviderCard
-                key={def.id}
-                def={def}
-                configModels={providerModels}
-                isReachable={isReachable}
-                isHealthLoading={healthLoading}
-                selectedChatName={selectedChatName}
-                selectedVisionName={selectedVisionName}
-                onRequestSelect={requestSelectChat}
-                onRequestVision={requestToggleVision}
-                disabled={demo}
+        {isLoading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" />
+            {t.common.loading}
+          </div>
+        ) : error ? (
+          <p className="py-4 text-sm text-destructive">
+            {t.settings.models.loadError}: {error.message}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {/* Step 1: Provider selector */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Provider</p>
+              <ProviderSelector
+                providers={PROVIDER_DEFINITIONS}
+                selectedId={activeProviderId}
+                health={health}
+                healthLoading={healthLoading}
+                onChange={(id) => {
+                  setActiveProviderId(id);
+                }}
               />
-            );
-          })}
-        </div>
-      )}
-    </SettingsSection>
+            </div>
+
+            {/* Step 2: API key (cloud only, not openrouter) */}
+            {activeDef?.kind === "cloud" && activeDef.id !== "openrouter" && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">API Key</p>
+                <ApiKeySection
+                  providerId={activeProviderId}
+                  docUrl={activeDef.docUrl}
+                  onKeyValidated={(key) => setValidatedKey(key)}
+                />
+              </div>
+            )}
+
+            {/* Step 3: Model list */}
+            {activeDef && (
+              <div className="space-y-2 flex flex-col min-h-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Models</p>
+                  {activeDef.kind === "local" && activeHealth !== undefined && (
+                    <span className={cn("flex items-center gap-1 text-[10px]", activeHealth ? "text-emerald-400" : "text-muted-foreground/40")}>
+                      <span className={cn("size-1.5 rounded-full", activeHealth ? "bg-emerald-400" : "bg-muted-foreground/30")} />
+                      {activeHealth ? t.settings.models.localRunning : t.settings.models.localNotRunning}
+                    </span>
+                  )}
+                </div>
+                <ModelListPanel
+                  def={activeDef}
+                  configModels={modelsByProvider.get(activeProviderId) ?? []}
+                  apiKey={validatedKey}
+                  isReachable={activeHealth}
+                  selectedChatName={selectedChatName}
+                  selectedVisionName={selectedVisionName}
+                  onRequestSelect={(id, name) => requestSelectChat(id, name, activeDef.displayName)}
+                  onRequestVision={(id, name) => requestToggleVision(id, name, activeDef.displayName)}
+                  disabled={demo}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </SettingsSection>
     </>
   );
 }

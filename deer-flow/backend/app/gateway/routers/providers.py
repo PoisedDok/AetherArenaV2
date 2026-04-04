@@ -1,6 +1,7 @@
 """Provider health probing, API key testing, and live model fetching endpoints."""
 
 import asyncio
+import os
 
 import httpx
 from fastapi import APIRouter
@@ -57,9 +58,11 @@ class OpenRouterModelsResponse(BaseModel):
 
 # ── Local provider probe ──────────────────────────────────────────────────────
 
+_LOCAL_HOST = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+
 _LOCAL_PROVIDERS: dict[str, str] = {
-    "lmstudio": "http://localhost:1234",
-    "ollama": "http://localhost:11434",
+    "lmstudio": f"http://{_LOCAL_HOST}:1234",
+    "ollama": f"http://{_LOCAL_HOST}:11434",
 }
 
 
@@ -292,24 +295,36 @@ async def _fetch_provider_models(provider: str, api_key: str) -> FetchModelsResp
     if provider == "openrouter":
         models = await _fetch_openrouter_models_public()
         return FetchModelsResponse(models=models)
-    if provider in ("lmstudio", "ollama"):
-        # Local providers: no key needed, just probe
-        probe = await (_probe_lmstudio(_LOCAL_PROVIDERS["lmstudio"]) if provider == "lmstudio"
-                       else _probe_ollama(_LOCAL_PROVIDERS["ollama"]))
-        if not probe.reachable:
-            return FetchModelsResponse(models=[], error="Provider not running")
-        # Re-fetch full model list
-        base_url = _LOCAL_PROVIDERS[provider]
+    if provider == "lmstudio":
+        base_url = _LOCAL_PROVIDERS["lmstudio"]
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                if provider == "lmstudio":
-                    r = await client.get(f"{base_url}/v1/models")
-                    raw = r.json().get("data", [])
-                    models = [ProviderModel(id=m.get("id", ""), name=m.get("id", "")) for m in raw]
-                else:
-                    r = await client.get(f"{base_url}/api/tags")
-                    raw = r.json().get("models", [])
-                    models = [ProviderModel(id=m.get("name", ""), name=m.get("name", "")) for m in raw]
+                r = await client.get(f"{base_url}/api/v0/models")
+            r.raise_for_status()
+            raw = r.json().get("data", [])
+            models = []
+            for m in raw:
+                mid = m.get("id", "")
+                mtype = m.get("type", "llm")
+                # Skip embedding and reranker models — not chat models
+                if mtype in ("embeddings", "reranker"):
+                    continue
+                models.append(ProviderModel(
+                    id=mid,
+                    name=mid,
+                    supports_vision=mtype == "vlm",
+                ))
+            return FetchModelsResponse(models=models)
+        except Exception as exc:
+            return FetchModelsResponse(models=[], error=str(exc))
+    if provider == "ollama":
+        base_url = _LOCAL_PROVIDERS["ollama"]
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(f"{base_url}/api/tags")
+            r.raise_for_status()
+            raw = r.json().get("models", [])
+            models = [ProviderModel(id=m.get("name", ""), name=m.get("name", "")) for m in raw]
             return FetchModelsResponse(models=models)
         except Exception as exc:
             return FetchModelsResponse(models=[], error=str(exc))

@@ -21,6 +21,11 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     auto_followup: true,
     auto_memory: true,
   },
+  guru: {
+    muted: false,
+    /** Name of the model (config key) to use for Guru reactions. null = use cheapest available. */
+    model_name: null,
+  },
 };
 
 const LOCAL_SETTINGS_KEY = "deerflow.local-settings";
@@ -49,6 +54,16 @@ export interface LocalSettings {
     auto_followup: boolean;
     /** When false, skip background memory update LLM calls for this client. */
     auto_memory: boolean;
+  };
+  guru: {
+    /** When true, Guru reactions are silenced (observer still fires, bubble never shows). */
+    muted: boolean;
+    /**
+     * Model config key to use for Guru reaction calls via /api/guru/react.
+     * null means the backend will pick the cheapest/default available model.
+     * Any model from the provider list works — a small 2B SLM is ideal.
+     */
+    model_name: string | null;
   };
 }
 
@@ -81,6 +96,10 @@ export function getLocalSettings(): LocalSettings {
         behavior: {
           ...DEFAULT_LOCAL_SETTINGS.behavior,
           ...(settings.behavior ?? {}),
+        },
+        guru: {
+          ...DEFAULT_LOCAL_SETTINGS.guru,
+          ...(settings.guru ?? {}),
         },
       };
       return mergedSettings;

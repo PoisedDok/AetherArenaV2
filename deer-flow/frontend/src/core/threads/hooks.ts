@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
 import { getAPIClient } from "../api";
+import { getGuru, getGuruMuted } from "../guru/guru";
+import { fireGuruObserver } from "../guru/observer";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
@@ -179,6 +181,38 @@ export function useThreadStream({
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+
+      // Fire Guru observer — generates a 1-sentence reaction from the companion.
+      // Completely non-blocking; any errors are swallowed inside fireGuruObserver.
+      const guru = getGuru();
+      if (guru && !getGuruMuted()) {
+        const messages = state.values?.messages ?? [];
+        const lastAi = [...messages].reverse().find((m: { type: string }) => m.type === "ai");
+        if (lastAi) {
+          const content = lastAi.content;
+          const lastAiText =
+            typeof content === "string"
+              ? content
+              : Array.isArray(content)
+                ? content
+                    .filter((c: unknown) => typeof c === "object" && c !== null && (c as { type?: string }).type === "text")
+                    .map((c: unknown) => (c as { text?: string }).text ?? "")
+                    .join("")
+                : "";
+          if (lastAiText.trim()) {
+            const guruModelName = getLocalSettings().guru.model_name ?? undefined;
+            void fireGuruObserver(
+              lastAiText,
+              guru,
+              (reaction) => {
+                window.dispatchEvent(new CustomEvent("guru:reaction", { detail: reaction }));
+              },
+              undefined,
+              guruModelName,
+            );
+          }
+        }
+      }
     },
   });
 
@@ -373,7 +407,8 @@ export function useThreadStream({
           vision_model_name?: string;
         };
 
-        // If the message has image attachments and a dedicated vision model is set, use it
+        // If the message has image attachments and a dedicated vision model is set, use it —
+        // but only if the primary model doesn't already support vision itself.
         const hasImageFiles = (message.files ?? []).some((f) => {
           const mediaType = f.mediaType ?? "";
           const filename = f.filename ?? "";
@@ -382,10 +417,15 @@ export function useThreadStream({
             /\.(png|jpe?g|webp|gif)$/i.test(filename)
           );
         });
+        const cachedModels = (queryClient.getQueryData(["models"]) as { name: string; supports_vision?: boolean }[] | undefined) ?? [];
+        const primaryModelName = ctxWithExtras.model_name;
+        const primarySupportsVision = cachedModels.some(
+          (m) => m.name === primaryModelName && m.supports_vision,
+        );
         const effectiveModelName =
-          hasImageFiles && ctxWithExtras.vision_model_name
+          hasImageFiles && ctxWithExtras.vision_model_name && !primarySupportsVision
             ? ctxWithExtras.vision_model_name
-            : ctxWithExtras.model_name;
+            : primaryModelName;
         const isBootstrap = Boolean(ctxWithExtras.is_bootstrap);
         const rawExtra = extraContext ?? {};
         const agentNameFromExtra =
