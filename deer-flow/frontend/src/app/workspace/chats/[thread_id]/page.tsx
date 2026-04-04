@@ -91,10 +91,14 @@ export default function ChatPage() {
             <div className="flex w-full items-center text-sm font-medium">
               <ThreadTitle threadId={threadId} thread={thread} />
             </div>
-            <div className="flex items-center">
-              <ExportTrigger threadId={threadId} />
-              <ArtifactTrigger />
-            </div>
+            
+            {/* Conditionally render right-side header actions ONLY if it's NOT a new thread */}
+            {!isNewThread && (
+              <div className="flex items-center">
+                <ExportTrigger threadId={threadId} />
+                <ArtifactTrigger />
+              </div>
+            )}
           </header>
           <main className="flex min-h-0 max-w-full grow flex-col">
             <div className="flex min-h-0 flex-1 justify-center">
@@ -123,31 +127,33 @@ export default function ChatPage() {
                   }
                 />
                 <div className="relative">
-                  {/* Guru floats above the input box — no layout impact */}
-                  <div className="absolute bottom-full left-1 z-40 pb-1 pointer-events-auto">
-                    <GuruWidget />
-                  </div>
-                <InputBox
-                  className={cn("bg-background/5 w-full")}
-                  isNewThread={isNewThread}
-                  threadId={threadId}
-                  autoFocus={isNewThread}
-                  status={
-                    thread.error
-                      ? "error"
-                      : thread.isLoading
-                        ? "streaming"
-                        : "ready"
-                  }
-                  context={settings.context}
-                  extraHeader={
-                    isNewThread && <Welcome />
-                  }
-                  disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" || isUploading}
-                  onContextChange={(context) => setSettings("context", context)}
-                  onSubmit={handleSubmit}
-                  onStop={handleStop}
-                />
+                  {/* Conditionally render Guru only if it's NOT a new thread */}
+                  {!isNewThread && (
+                    <div className="absolute bottom-full left-1 z-40 pb-1 pointer-events-auto">
+                      <GuruWidget />
+                    </div>
+                  )}
+                  <InputBox
+                    className={cn("bg-background/5 w-full")}
+                    isNewThread={isNewThread}
+                    threadId={threadId}
+                    autoFocus={isNewThread}
+                    status={
+                      thread.error
+                        ? "error"
+                        : thread.isLoading
+                          ? "streaming"
+                          : "ready"
+                    }
+                    context={settings.context}
+                    extraHeader={
+                      isNewThread && <Welcome />
+                    }
+                    disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" || isUploading}
+                    onContextChange={(context) => setSettings("context", context)}
+                    onSubmit={handleSubmit}
+                    onStop={handleStop}
+                  />
                 </div>
                 {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
                   <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
