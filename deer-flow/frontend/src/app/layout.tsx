@@ -6,6 +6,7 @@ import { type Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
+import { seedAuthUser } from "@/server/better-auth/seed";
 
 export const metadata: Metadata = {
   title: "AetherArena v2",
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  await seedAuthUser();
   const locale = await detectLocaleServer();
   return (
     <html lang={locale} suppressContentEditableWarning suppressHydrationWarning>

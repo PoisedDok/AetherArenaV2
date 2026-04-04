@@ -17,6 +17,10 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    // Single-user login credentials
+    APP_USERNAME: z.string().optional(),
+    APP_PASSWORD: z.string().optional(),
+    BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
   },
 
   /**
@@ -40,6 +44,9 @@ export const env = createEnv({
     BETTER_AUTH_GITHUB_CLIENT_SECRET:
       process.env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
     NODE_ENV: process.env.NODE_ENV,
+    APP_USERNAME: process.env.APP_USERNAME,
+    APP_PASSWORD: process.env.APP_PASSWORD,
+    BETTER_AUTH_TRUSTED_ORIGINS: process.env.BETTER_AUTH_TRUSTED_ORIGINS,
 
     NEXT_PUBLIC_BACKEND_BASE_URL: process.env.NEXT_PUBLIC_BACKEND_BASE_URL,
     NEXT_PUBLIC_LANGGRAPH_BASE_URL: process.env.NEXT_PUBLIC_LANGGRAPH_BASE_URL,

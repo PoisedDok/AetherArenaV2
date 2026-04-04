@@ -240,6 +240,10 @@ export function InputBox({
       return;
     }
     const currentModel = models.find((m) => m.name === context.model_name);
+    // If a custom/external model ID is set (e.g. OpenRouter), don't overwrite it
+    if (!currentModel && context.model_name) {
+      return;
+    }
     const fallbackModel = currentModel ?? models[0]!;
     const supportsThinking = fallbackModel.supports_thinking ?? false;
     const nextModelName = fallbackModel.name;
@@ -260,7 +264,11 @@ export function InputBox({
     if (models.length === 0) {
       return undefined;
     }
-    return models.find((m) => m.name === context.model_name) ?? models[0];
+    // If a custom/external model ID is set (e.g. OpenRouter), don't fall back to models[0]
+    if (context.model_name) {
+      return models.find((m) => m.name === context.model_name) ?? null;
+    }
+    return models[0];
   }, [context.model_name, models]);
 
   const supportThinking = useMemo(
@@ -276,13 +284,10 @@ export function InputBox({
   const handleModelSelect = useCallback(
     (model_name: string) => {
       const model = models.find((m) => m.name === model_name);
-      if (!model) {
-        return;
-      }
       onContextChange?.({
         ...context,
         model_name,
-        mode: getResolvedMode(context.mode, model.supports_thinking ?? false),
+        mode: getResolvedMode(context.mode, model?.supports_thinking ?? false),
         reasoning_effort: context.reasoning_effort,
       });
       setModelDialogOpen(false);
@@ -801,7 +806,7 @@ export function InputBox({
               <PromptInputButton className="gap-1.5! px-2!">
                 <CpuIcon className="size-3 shrink-0" />
                 <span className="max-w-[96px] truncate text-xs font-normal">
-                  {selectedModel ? formatModelDisplay(selectedModel) : "Model"}
+                  {selectedModel ? formatModelDisplay(selectedModel) : typeof context.model_name === "string" && context.model_name ? (context.model_name.split("/").pop() ?? context.model_name) : "Model"}
                 </span>
               </PromptInputButton>
             </ModelSelectorTrigger>

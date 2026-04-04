@@ -14,7 +14,7 @@ import {
   SparklesIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import { useModels } from "@/core/models/hooks";
@@ -36,6 +36,86 @@ import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { SettingsSection } from "./settings-section";
+
+// ── API key persistence (localStorage, never sent to server) ─────────────────
+
+const API_KEY_STORAGE_PREFIX = "deerflow.provider-key.";
+
+function loadSavedKey(providerId: string): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(API_KEY_STORAGE_PREFIX + providerId) ?? "";
+}
+
+function saveKey(providerId: string, key: string) {
+  if (typeof window === "undefined") return;
+  if (key) {
+    localStorage.setItem(API_KEY_STORAGE_PREFIX + providerId, key);
+  } else {
+    localStorage.removeItem(API_KEY_STORAGE_PREFIX + providerId);
+  }
+}
+
+// ── Confirm dialog ────────────────────────────────────────────────────────────
+
+type SelectionKind = "chat" | "vision";
+
+interface PendingSelection {
+  modelId: string;
+  modelName: string;
+  kind: SelectionKind;
+  providerName: string;
+}
+
+function ConfirmDialog({
+  pending,
+  onConfirm,
+  onCancel,
+}: {
+  pending: PendingSelection;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border/60 bg-background shadow-2xl mx-4">
+        <div className="px-5 py-4 border-b border-border/30">
+          <p className="text-sm font-semibold">
+            {pending.kind === "chat" ? "Set as chat model" : "Set as vision model"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">{pending.providerName}</p>
+        </div>
+        <div className="px-5 py-4 space-y-1">
+          <p className="text-sm font-medium truncate">{pending.modelName}</p>
+          {pending.modelId !== pending.modelName && (
+            <p className="font-mono text-[11px] text-muted-foreground/60 truncate">{pending.modelId}</p>
+          )}
+          <p className="text-xs text-muted-foreground/70 pt-1">
+            {pending.kind === "chat"
+              ? "This will be used as the default model for all new conversations."
+              : "This will be used when messages contain images."}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/30">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-border/50 bg-muted/30 px-3 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors"
+          >
+            {t.common.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Capability badges ─────────────────────────────────────────────────────────
 
@@ -218,14 +298,14 @@ function LiveModelRow({
 function OpenRouterBrowser({
   selectedChatName,
   selectedVisionName,
-  onSelectChat,
-  onToggleVision,
+  onRequestSelect,
+  onRequestVision,
   disabled,
 }: {
   selectedChatName: string | undefined;
   selectedVisionName: string | undefined;
-  onSelectChat: (id: string) => void;
-  onToggleVision: (id: string) => void;
+  onRequestSelect: (id: string, name: string) => void;
+  onRequestVision: (id: string, name: string) => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
@@ -289,8 +369,8 @@ function OpenRouterBrowser({
               model={m}
               isChatSelected={m.id === selectedChatName}
               isVisionSelected={m.id === selectedVisionName}
-              onSelectChat={() => onSelectChat(m.id)}
-              onToggleVision={() => onToggleVision(m.id)}
+              onSelectChat={() => onRequestSelect(m.id, m.name)}
+              onToggleVision={() => onRequestVision(m.id, m.name)}
               disabled={disabled}
             />
           ))
@@ -308,8 +388,8 @@ function CloudKeySection({
   isOpenRouter,
   selectedChatName,
   selectedVisionName,
-  onSelectChat,
-  onToggleVision,
+  onRequestSelect,
+  onRequestVision,
   disabled,
 }: {
   providerId: string;
@@ -317,12 +397,12 @@ function CloudKeySection({
   isOpenRouter: boolean;
   selectedChatName: string | undefined;
   selectedVisionName: string | undefined;
-  onSelectChat: (id: string) => void;
-  onToggleVision: (id: string) => void;
+  onRequestSelect: (id: string, name: string) => void;
+  onRequestVision: (id: string, name: string) => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
-  const [key, setKey] = useState("");
+  const [key, setKey] = useState(() => loadSavedKey(providerId));
   const { mutate: testKey, isPending: isTesting, data: testResult, reset: resetTest } = useTestProviderKey();
   const { mutate: fetchModels, isPending: isFetching, data: modelsResult, reset: resetModels } = useFetchProviderModels();
   const [search, setSearch] = useState("");
@@ -335,6 +415,7 @@ function CloudKeySection({
       {
         onSuccess: (result) => {
           if (result.valid) {
+            saveKey(providerId, key.trim()); // persist on successful validation
             fetchModels({ provider: providerId, api_key: key.trim() });
           }
         },
@@ -452,8 +533,8 @@ function CloudKeySection({
                   model={m}
                   isChatSelected={m.id === selectedChatName}
                   isVisionSelected={m.id === selectedVisionName}
-                  onSelectChat={() => onSelectChat(m.id)}
-                  onToggleVision={() => onToggleVision(m.id)}
+                  onSelectChat={() => onRequestSelect(m.id, m.name)}
+                  onToggleVision={() => onRequestVision(m.id, m.name)}
                   disabled={disabled}
                 />
               ))
@@ -526,8 +607,8 @@ function LocalProviderSection({
   localUrl,
   selectedChatName,
   selectedVisionName,
-  onSelectChat,
-  onToggleVision,
+  onRequestSelect,
+  onRequestVision,
   disabled,
 }: {
   providerId: string;
@@ -535,8 +616,8 @@ function LocalProviderSection({
   localUrl: string;
   selectedChatName: string | undefined;
   selectedVisionName: string | undefined;
-  onSelectChat: (id: string) => void;
-  onToggleVision: (id: string) => void;
+  onRequestSelect: (id: string, name: string) => void;
+  onRequestVision: (id: string, name: string) => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
@@ -584,8 +665,8 @@ function LocalProviderSection({
               model={m}
               isChatSelected={m.id === selectedChatName}
               isVisionSelected={m.id === selectedVisionName}
-              onSelectChat={() => onSelectChat(m.id)}
-              onToggleVision={() => onToggleVision(m.id)}
+              onSelectChat={() => onRequestSelect(m.id, m.name)}
+              onToggleVision={() => onRequestVision(m.id, m.name)}
               disabled={disabled}
             />
           ))}
@@ -604,8 +685,8 @@ function ProviderCard({
   isHealthLoading,
   selectedChatName,
   selectedVisionName,
-  onSelectChat,
-  onToggleVision,
+  onRequestSelect,
+  onRequestVision,
   disabled,
 }: {
   def: ProviderDefinition;
@@ -614,17 +695,13 @@ function ProviderCard({
   isHealthLoading: boolean;
   selectedChatName: string | undefined;
   selectedVisionName: string | undefined;
-  onSelectChat: (name: string) => void;
-  onToggleVision: (name: string) => void;
+  onRequestSelect: (modelId: string, modelName: string, providerName: string) => void;
+  onRequestVision: (modelId: string, modelName: string, providerName: string) => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
 
-  // Is the selected model coming from this provider's config models?
   const hasActiveConfigModel = configModels.some((m) => m.name === selectedChatName);
-
-  // For cloud providers: is the manually-selected model ID matching this provider?
-  // (selected from live models of this provider or manually typed and used here)
   const isOpenRouter = def.id === "openrouter";
 
   const statusDot = def.kind === "local" ? (
@@ -689,8 +766,8 @@ function ProviderCard({
               model={m}
               isChatSelected={m.name === selectedChatName}
               isVisionSelected={m.name === selectedVisionName}
-              onSelectChat={() => onSelectChat(m.name)}
-              onToggleVision={() => onToggleVision(m.name)}
+              onSelectChat={() => onRequestSelect(m.name, m.display_name?.trim() ?? m.model, def.displayName)}
+              onToggleVision={() => onRequestVision(m.name, m.display_name?.trim() ?? m.model, def.displayName)}
               disabled={disabled}
             />
           ))}
@@ -705,8 +782,8 @@ function ProviderCard({
           localUrl={def.localUrl}
           selectedChatName={selectedChatName}
           selectedVisionName={selectedVisionName}
-          onSelectChat={onSelectChat}
-          onToggleVision={onToggleVision}
+          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
+          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
           disabled={disabled}
         />
       )}
@@ -719,8 +796,8 @@ function ProviderCard({
           isOpenRouter={isOpenRouter}
           selectedChatName={selectedChatName}
           selectedVisionName={selectedVisionName}
-          onSelectChat={onSelectChat}
-          onToggleVision={onToggleVision}
+          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
+          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
           disabled={disabled}
         />
       )}
@@ -730,15 +807,15 @@ function ProviderCard({
         <OpenRouterBrowser
           selectedChatName={selectedChatName}
           selectedVisionName={selectedVisionName}
-          onSelectChat={onSelectChat}
-          onToggleVision={onToggleVision}
+          onRequestSelect={(id, name) => onRequestSelect(id, name, def.displayName)}
+          onRequestVision={(id, name) => onRequestVision(id, name, def.displayName)}
           disabled={disabled}
         />
       )}
 
       {/* Manual model input — always shown at bottom of each provider */}
       <ManualModelInput
-        onSelectChat={onSelectChat}
+        onSelectChat={(id) => onRequestSelect(id, id, def.displayName)}
         disabled={disabled}
       />
     </div>
@@ -753,6 +830,7 @@ export function ModelsSettingsPage() {
   const { data: healthData, isLoading: healthLoading } = useProvidersHealth();
   const [localSettings, setLocalSettings] = useLocalSettings();
   const demo = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true";
+  const [pending, setPending] = useState<PendingSelection | null>(null);
 
   const selectedChatName: string | undefined =
     typeof localSettings.context.model_name === "string" &&
@@ -766,15 +844,31 @@ export function ModelsSettingsPage() {
       ? localSettings.context.vision_model_name
       : undefined;
 
-  const handleSelectChat = (name: string) => {
-    setLocalSettings("context", { model_name: name });
-  };
+  // Called by any row — shows confirm dialog before applying
+  const requestSelectChat = useCallback((modelId: string, modelName: string, providerName: string) => {
+    if (modelId === selectedChatName) return; // already selected
+    setPending({ modelId, modelName, kind: "chat", providerName });
+  }, [selectedChatName]);
 
-  const handleToggleVision = (name: string) => {
-    setLocalSettings("context", {
-      vision_model_name: name === selectedVisionName ? undefined : name,
-    });
-  };
+  const requestToggleVision = useCallback((modelId: string, modelName: string, providerName: string) => {
+    if (modelId === selectedVisionName) {
+      // deselect immediately — no confirm needed to clear
+      setLocalSettings("context", { vision_model_name: undefined });
+      return;
+    }
+    setPending({ modelId, modelName, kind: "vision", providerName });
+  }, [selectedVisionName, setLocalSettings]);
+
+  const confirmSelection = useCallback(() => {
+    if (!pending) return;
+    if (pending.kind === "chat") {
+      setLocalSettings("context", { model_name: pending.modelId });
+    } else {
+      setLocalSettings("context", { vision_model_name: pending.modelId });
+    }
+    setPending(null);
+  }, [pending, setLocalSettings]);
+
 
   const modelsByProvider = useMemo(() => {
     const map = new Map<string, Model[]>();
@@ -791,6 +885,14 @@ export function ModelsSettingsPage() {
   const selectedVisionModel = models.find((m) => m.name === selectedVisionName);
 
   return (
+    <>
+    {pending && (
+      <ConfirmDialog
+        pending={pending}
+        onConfirm={confirmSelection}
+        onCancel={() => setPending(null)}
+      />
+    )}
     <SettingsSection
       title={t.settings.models.title}
       description={t.settings.models.description}
@@ -873,8 +975,8 @@ export function ModelsSettingsPage() {
                 isHealthLoading={healthLoading}
                 selectedChatName={selectedChatName}
                 selectedVisionName={selectedVisionName}
-                onSelectChat={handleSelectChat}
-                onToggleVision={handleToggleVision}
+                onRequestSelect={requestSelectChat}
+                onRequestVision={requestToggleVision}
                 disabled={demo}
               />
             );
@@ -882,5 +984,6 @@ export function ModelsSettingsPage() {
         </div>
       )}
     </SettingsSection>
+    </>
   );
 }

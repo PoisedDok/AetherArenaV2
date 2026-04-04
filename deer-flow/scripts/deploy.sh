@@ -16,7 +16,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 DOCKER_DIR="$REPO_ROOT/docker"
-COMPOSE_CMD=(docker compose -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml")
+# Pass --env-file explicitly so compose substitutes variables from deer-flow/.env
+# regardless of the working directory or shell environment.
+COMPOSE_CMD=(docker compose -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml" --env-file "$REPO_ROOT/.env")
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 
@@ -99,6 +101,32 @@ if [ -z "$BETTER_AUTH_SECRET" ]; then
         echo -e "${GREEN}✓ BETTER_AUTH_SECRET generated → $_secret_file${NC}"
     fi
 fi
+
+# ── APP_PASSWORD ─────────────────────────────────────────────────────────────
+# Single-user login password. Persisted to disk so it survives redeployments.
+
+_password_file="$DEER_FLOW_HOME/.app-password"
+if [ -z "$APP_PASSWORD" ]; then
+    if [ -f "$_password_file" ]; then
+        export APP_PASSWORD
+        APP_PASSWORD="$(cat "$_password_file")"
+        echo -e "${GREEN}✓ APP_PASSWORD loaded from $_password_file${NC}"
+    else
+        echo -e "${YELLOW}⚠ APP_PASSWORD not set. Generating a random password...${NC}"
+        export APP_PASSWORD
+        APP_PASSWORD="$(python3 -c 'import secrets, string; print(secrets.token_urlsafe(16))')"
+        echo "$APP_PASSWORD" > "$_password_file"
+        chmod 600 "$_password_file"
+        echo -e "${GREEN}✓ APP_PASSWORD generated → $_password_file${NC}"
+        echo -e "${YELLOW}  Login: admin / $APP_PASSWORD${NC}"
+    fi
+fi
+
+export APP_USERNAME="${APP_USERNAME:-admin}"
+export BETTER_AUTH_TRUSTED_ORIGINS="${BETTER_AUTH_TRUSTED_ORIGINS:-}"
+# Set BETTER_AUTH_URL so better-auth knows its own URL for cookie/session handling.
+# Uses the same PORT that nginx listens on. Can be overridden in .env.
+export BETTER_AUTH_URL="${BETTER_AUTH_URL:-http://localhost:${PORT:-2026}}"
 
 # ── detect_sandbox_mode ───────────────────────────────────────────────────────
 
