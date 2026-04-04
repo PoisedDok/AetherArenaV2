@@ -12,6 +12,7 @@ import { getGuru, getGuruMuted } from "../guru/guru";
 import { fireGuruObserver } from "../guru/observer";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
+import type { Model } from "../models/types";
 import type { LocalSettings } from "../settings";
 import { getLocalSettings } from "../settings/local";
 import { useUpdateSubtask } from "../tasks/context";
@@ -182,25 +183,30 @@ export function useThreadStream({
       listeners.current.onFinish?.(state.values);
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
 
+      // Signal Guru to return to idle — LLM observer will fire guru:move shortly
+      window.dispatchEvent(new CustomEvent("guru:state", { detail: "idle" }));
+
       // Fire Guru observer — generates a 1-sentence reaction from the companion.
       // Completely non-blocking; any errors are swallowed inside fireGuruObserver.
       const guru = getGuru();
       if (guru && !getGuruMuted()) {
-        const messages = state.values?.messages ?? [];
-        const lastAi = [...messages].reverse().find((m: { type: string }) => m.type === "ai");
+        // Prefer state.values.messages, fall back to thread.messages (live ref)
+        const messages = (state.values?.messages ?? []) as Array<{ type: string; content: unknown }>;
+        const lastAi = [...messages].reverse().find((m) => m.type === "ai");
         if (lastAi) {
           const content = lastAi.content;
           const lastAiText =
             typeof content === "string"
               ? content
               : Array.isArray(content)
-                ? content
-                    .filter((c: unknown) => typeof c === "object" && c !== null && (c as { type?: string }).type === "text")
-                    .map((c: unknown) => (c as { text?: string }).text ?? "")
+                ? (content as unknown[])
+                    .filter((c) => typeof c === "object" && c !== null && (c as { type?: string }).type === "text")
+                    .map((c) => (c as { text?: string }).text ?? "")
                     .join("")
                 : "";
           if (lastAiText.trim()) {
-            const guruModelName = getLocalSettings().guru.model_name ?? undefined;
+            // Default to "lfm" (small, fast 1.2B model) if no Guru model configured
+            const guruModelName = getLocalSettings().guru.model_name ?? "lfm";
             void fireGuruObserver(
               lastAiText,
               guru,
@@ -228,11 +234,16 @@ export function useThreadStream({
   const [frozenMessages, setFrozenMessages] = useState<Message[] | null>(null);
 
   // Clear optimistic + frozen when server messages arrive (count increases past
-  // what we saw before the submit).
+  // what we saw before the submit). Also signal Guru that streaming has started —
+  // but only when a real send is in-flight (not on initial history rehydration).
   useEffect(() => {
     if (thread.messages.length > prevMsgCountRef.current) {
       if (optimisticMessages.length > 0) setOptimisticMessages([]);
       if (frozenMessages !== null) setFrozenMessages(null);
+      // Only fire streaming state if user actually sent something (not history load)
+      if (optimisticMessages.length > 0) {
+        window.dispatchEvent(new CustomEvent("guru:state", { detail: "streaming" }));
+      }
     }
   }, [thread.messages.length, optimisticMessages.length, frozenMessages]);
 
@@ -286,6 +297,9 @@ export function useThreadStream({
         });
       }
       setOptimisticMessages(newOptimistic);
+
+      // Signal Guru to start pacing — user submitted, waiting for first token
+      window.dispatchEvent(new CustomEvent("guru:state", { detail: "processing" }));
 
       _handleOnStart(threadId);
 
@@ -417,7 +431,7 @@ export function useThreadStream({
             /\.(png|jpe?g|webp|gif)$/i.test(filename)
           );
         });
-        const cachedModels = (queryClient.getQueryData(["models"]) as { name: string; supports_vision?: boolean }[] | undefined) ?? [];
+        const cachedModels = queryClient.getQueryData<Model[]>(["models"]) ?? [];
         const primaryModelName = ctxWithExtras.model_name;
         const primarySupportsVision = cachedModels.some(
           (m) => m.name === primaryModelName && m.supports_vision,
@@ -518,6 +532,8 @@ export function useThreadStream({
     if (currentlyVisible && currentlyVisible.length > 0) {
       setFrozenMessages(currentlyVisible);
     }
+    // Signal Guru to settle — user stopped the stream
+    window.dispatchEvent(new CustomEvent("guru:state", { detail: "idle" }));
     await thread.stop();
   }, [thread, optimisticMessages]);
 

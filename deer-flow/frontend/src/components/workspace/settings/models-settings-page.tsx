@@ -492,10 +492,10 @@ function ModelListPanel({
         id: m.name,
         displayName: m.display_name?.trim() ?? m.model,
         modelId: m.model,
-        supportsThinking: m.supports_thinking || (live?.supports_thinking ?? false),
+        supportsThinking: (m.supports_thinking ?? false) || (live?.supports_thinking ?? false),
         supportsReasoning: m.supports_reasoning_effort,
         // Live model data is authoritative for vision — LM Studio /api/v0/models knows better than static config
-        supportsVision: m.supports_vision || (live?.supports_vision ?? false),
+        supportsVision: (m.supports_vision ?? false) || (live?.supports_vision ?? false),
       });
     }
 
@@ -729,7 +729,7 @@ export function ModelsSettingsPage() {
               <p className="text-sm italic text-muted-foreground/50">{t.settings.models.noneSelected}</p>
             )}
           </div>
-          {(selectedVisionModel || selectedVisionName) && selectedVisionName !== selectedChatName && (
+          {(selectedVisionModel ?? selectedVisionName) && selectedVisionName !== selectedChatName && (
             <div className="shrink-0 border-l border-border/30 pl-4 min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">
                 {t.settings.models.visionModelTitle}

@@ -92,7 +92,6 @@ import {
 } from "../ai-elements/model-selector";
 import { Suggestion, Suggestions } from "../ai-elements/suggestion";
 
-import { GuruWidget } from "./guru/GuruWidget";
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 
@@ -495,10 +494,6 @@ export function InputBox({
 
   return (
     <div ref={promptRootRef} className="relative">
-      {/* Guru companion — floats above the input, anchored bottom-right */}
-      <div className="absolute right-2 bottom-full z-20 mb-1 pointer-events-auto">
-        <GuruWidget />
-      </div>
       <PromptInput
         className={cn(
           "glass-chat-input rounded-2xl transition-all duration-300 ease-out *:data-[slot='input-group']:rounded-2xl",

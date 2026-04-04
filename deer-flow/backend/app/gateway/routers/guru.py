@@ -2,14 +2,16 @@
 Guru companion reaction endpoint.
 
 Receives a last-AI-text + system prompt from the frontend and calls a
-configurable model (defaults to the first model in config) with max_tokens=60
-to generate a short 1-sentence reaction from Guru's perspective.
+configurable model (defaults to the first model in config) with max_tokens=80
+to generate a short 1-sentence reaction from Guru's perspective, plus a
+movement cue that drives the sprite animation.
 
 The model is kept server-side so API keys are never exposed to the browser.
 The caller can request a specific model by config name (e.g. a small 2B SLM).
 """
 
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -20,6 +22,10 @@ from deerflow.models import create_chat_model
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/guru", tags=["guru"])
+
+VALID_MOVES = frozenset({
+    "idle", "walk-left", "walk-right", "jump", "spin", "shake", "bounce", "peek",
+})
 
 
 class GuruReactRequest(BaseModel):
@@ -33,20 +39,38 @@ class GuruReactRequest(BaseModel):
 
 class GuruReactResponse(BaseModel):
     reaction: str = Field(..., description="1-sentence reaction from Guru")
+    move: str = Field(default="idle", description="Sprite move: idle|walk-left|walk-right|jump|spin|shake|bounce|peek")
+
+
+def _parse_move(text: str) -> tuple[str, str]:
+    """
+    Extract MOVE:<name> tag from LLM output.
+    Returns (reaction_text_without_tag, move_name).
+    Falls back to 'idle' if no valid move found.
+    """
+    m = re.search(r'\bMOVE:([\w-]+)\b', text, re.IGNORECASE)
+    if m:
+        move = m.group(1).lower()
+        if move not in VALID_MOVES:
+            move = "idle"
+        # Strip the tag from visible text
+        clean = re.sub(r'\s*MOVE:[\w-]+\b', '', text, flags=re.IGNORECASE).strip()
+        return clean, move
+    return text, "idle"
 
 
 @router.post(
     "/react",
     response_model=GuruReactResponse,
     summary="Generate Guru Reaction",
-    description="Generate a short companion reaction to the last AI message.",
+    description="Generate a short companion reaction to the last AI message, plus a movement cue.",
 )
 async def guru_react(request: GuruReactRequest) -> GuruReactResponse:
     """
-    Proxies a small LLM call to generate a Guru companion reaction.
+    Proxies a small LLM call to generate a Guru companion reaction + movement.
 
     Uses the model specified by `model_name` (a config key), or falls back to
-    the first configured model. Capped at 60 output tokens for speed/cost.
+    the first configured model. Capped at 80 output tokens for speed/cost.
     """
     if not request.last_ai_text.strip():
         raise HTTPException(status_code=400, detail="last_ai_text is required")
@@ -73,26 +97,43 @@ async def guru_react(request: GuruReactRequest) -> GuruReactResponse:
 
     from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore[import-untyped]
 
+    # Inject move instructions into the system prompt
+    move_instructions = (
+        "\n\nAfter your reaction, append exactly one move tag on the same line: "
+        "MOVE:<name> where <name> is one of: idle, walk-left, walk-right, jump, spin, shake, bounce, peek. "
+        "Choose the move that matches the emotional tone of your reaction:\n"
+        "- walk-left / walk-right: wandering, thinking, casual observation\n"
+        "- jump: excited, surprised, great news\n"
+        "- spin: confused, chaotic, mind-blown\n"
+        "- shake: disagreeing, skeptical, 'nope'\n"
+        "- bounce: happy, encouraging, playful\n"
+        "- peek: curious, cautious, intrigued\n"
+        "- idle: neutral, calm, just watching\n"
+        "Example output: 'Bold choice. MOVE:shake'"
+    )
+    augmented_system = request.system + move_instructions
+
     messages = [
-        SystemMessage(content=request.system),
+        SystemMessage(content=augmented_system),
         HumanMessage(content=request.last_ai_text[:1200]),
     ]
 
     try:
-        # max_tokens=20 forces brevity — Guru speaks in margin-note style (3-8 words)
-        bounded = model.bind(max_tokens=20)  # type: ignore[attr-defined]
+        # max_tokens=40 — reaction (3-8 words) + MOVE tag
+        bounded = model.bind(max_tokens=40)  # type: ignore[attr-defined]
         result = await bounded.ainvoke(messages)
-        reaction_text = str(result.content).strip()
+        raw_text = str(result.content).strip()
 
-        # Strip to first sentence/clause only — take whatever comes first
-        import re
+        # Parse move tag out first
+        reaction_text, move = _parse_move(raw_text)
+
+        # Strip to first sentence/clause only
         first = re.split(r'[.!?\n]', reaction_text)[0].strip()
-        # Determine original terminator to preserve it
-        m = re.search(r'[.!?]', reaction_text)
-        terminator = m.group(0) if m else '.'
+        m_term = re.search(r'[.!?]', reaction_text)
+        terminator = m_term.group(0) if m_term else '.'
         reaction_out = (first + terminator) if first else reaction_text[:40]
 
-        return GuruReactResponse(reaction=reaction_out)
+        return GuruReactResponse(reaction=reaction_out, move=move)
     except Exception as e:
         logger.warning("Guru reaction failed: %s", e)
         raise HTTPException(status_code=500, detail="Guru reaction generation failed")

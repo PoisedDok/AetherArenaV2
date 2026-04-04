@@ -10,6 +10,7 @@ import {
   useThreadChat,
 } from "@/components/workspace/chats";
 import { ExportTrigger } from "@/components/workspace/export-trigger";
+import { GuruWidget } from "@/components/workspace/guru/GuruWidget";
 import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
@@ -121,6 +122,11 @@ export default function ChatPage() {
                     !thread.values.todos || thread.values.todos.length === 0
                   }
                 />
+                <div className="relative">
+                  {/* Guru floats above the input box — no layout impact */}
+                  <div className="absolute bottom-full left-1 z-40 pb-1 pointer-events-auto">
+                    <GuruWidget />
+                  </div>
                 <InputBox
                   className={cn("bg-background/5 w-full")}
                   isNewThread={isNewThread}
@@ -142,6 +148,7 @@ export default function ChatPage() {
                   onSubmit={handleSubmit}
                   onStop={handleStop}
                 />
+                </div>
                 {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
                   <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
                     {t.common.notAvailableInDemoMode}

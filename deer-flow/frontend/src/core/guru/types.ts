@@ -29,7 +29,7 @@ export const SPECIES = [
 ] as const
 export type Species = (typeof SPECIES)[number]
 
-export const EYES = ['·', '✦', '×', '◉', '@', '°'] as const
+export const EYES = ['o', 'O', '◕', '●', '◦', '^'] as const
 export type Eye = (typeof EYES)[number]
 
 export const HATS = [
@@ -98,11 +98,11 @@ export const RARITY_STARS = {
 
 /** Tailwind class strings for each rarity (text + border) */
 export const RARITY_COLORS: Record<Rarity, string> = {
-  common: 'text-muted-foreground border-muted',
-  uncommon: 'text-green-400 border-green-400/40',
-  rare: 'text-blue-400 border-blue-400/40',
-  epic: 'text-purple-400 border-purple-400/40',
-  legendary: 'text-amber-400 border-amber-400/40',
+  common: 'text-foreground/90 border-white/20',
+  uncommon: 'text-emerald-300 border-emerald-400/40',
+  rare: 'text-sky-300 border-sky-400/40',
+  epic: 'text-violet-300 border-violet-400/40',
+  legendary: 'text-amber-300 border-amber-400/40',
 }
 
 /** Tailwind ring/glow class for rarity borders */

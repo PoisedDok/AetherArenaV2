@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { clearGuru, getGuruUserId, roll, saveGuruSoul } from '@/core/guru/guru'
-import { useGuru, useGuruMuted, useGuruReaction } from '@/core/guru/hooks'
+import { useGuru, useGuruIdleComments, useGuruMove, useGuruMuted, useGuruReaction, useGuruThinking } from '@/core/guru/hooks'
 import { RARITY_COLORS, RARITY_STARS, STAT_NAMES } from '@/core/guru/types'
 import { cn } from '@/lib/utils'
 
@@ -150,6 +150,10 @@ export function GuruWidget() {
   const guru = useGuru()
   const { reaction, fading, clearReaction } = useGuruReaction()
   const [muted, setMuted] = useGuruMuted()
+  const move = useGuruMove()
+  const thinking = useGuruThinking()
+  // Fires contextual hardcoded comments (greeting, idle, pet) — no LLM needed
+  useGuruIdleComments(muted)
   const [hatchOpen, setHatchOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
 
@@ -181,17 +185,23 @@ export function GuruWidget() {
   }
 
   return (
-    <div className="flex items-end gap-0.5 pb-1">
-      {/* Speech bubble — only shown when not muted and there's a reaction */}
-      {!muted && reaction && (
-        <GuruBubble guru={guru} reaction={reaction} fading={fading} />
-      )}
-
+    <div className="flex items-end gap-1 pb-1">
       {/* Context menu wraps the sprite */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <div className="cursor-pointer">
-            <GuruSprite guru={guru} excited={!muted && !!reaction} />
+          <div className="relative cursor-pointer">
+            <GuruSprite guru={guru} move={move} excited={!muted && !!reaction} />
+            {/* Thinking ring — tiny spinner in top-right corner of sprite */}
+            <span
+              aria-hidden
+              className={cn(
+                'pointer-events-none absolute -top-0.5 -right-0.5 size-2.5 rounded-full border border-transparent',
+                'border-t-current border-r-current',
+                thinking ? 'animate-spin opacity-70' : 'opacity-0',
+                RARITY_COLORS[guru.rarity].split(' ').find((c) => c.startsWith('text')) ?? 'text-muted-foreground',
+                'transition-opacity duration-300',
+              )}
+            />
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="end" className="w-44">
@@ -212,6 +222,11 @@ export function GuruWidget() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Speech bubble to the RIGHT of sprite, tail points left toward sprite */}
+      {!muted && reaction && (
+        <GuruBubble guru={guru} reaction={reaction} fading={fading} />
+      )}
 
       <HatchDialog open={hatchOpen} onOpenChange={setHatchOpen} />
       {guru && <StatsDialog open={statsOpen} onOpenChange={setStatsOpen} guru={guru} />}

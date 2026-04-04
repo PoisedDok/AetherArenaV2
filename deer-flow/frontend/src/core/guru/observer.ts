@@ -2,13 +2,28 @@ import { getBackendBaseURL } from '../config'
 
 import type { Guru } from './types'
 
+export type GuruMove =
+  | 'idle'
+  | 'walk-left'
+  | 'walk-right'
+  | 'jump'
+  | 'spin'
+  | 'shake'
+  | 'bounce'
+  | 'peek'
+
+const VALID_MOVES: ReadonlySet<string> = new Set([
+  'idle', 'walk-left', 'walk-right', 'jump', 'spin', 'shake', 'bounce', 'peek',
+])
+
 /**
- * Calls the backend /api/guru/react endpoint which proxies to a small LLM
- * (configurable in settings, defaults to the cheapest available model).
+ * Calls the backend /api/guru/react endpoint which proxies to a small LLM.
+ * Returns a reaction string + a movement cue for the sprite.
  *
  * This is the re-implementation of the private `fireCompanionObserver` from
  * Claude Code's buddy system. Called after every AI turn; generates a 1-sentence
- * reaction from Guru's perspective using its personality stats.
+ * reaction from Guru's perspective using its personality stats, plus a move
+ * that the backend LLM picks based on the emotional tone of the reaction.
  */
 export async function fireGuruObserver(
   lastAiText: string,
@@ -42,6 +57,9 @@ export async function fireGuruObserver(
     `Good examples: "Interesting approach." / "That'll bite you later." / "Classic." / "Hmm, not bad." / "Bold choice." / "Saw that coming." / "Check the edge cases."\n` +
     `Bad examples (too long, too explanatory): "That's a really elegant solution to the problem!" / "I notice this uses recursion which is interesting."`
 
+  // Signal that Guru is making an LLM call — shows thinking ring on sprite
+  window.dispatchEvent(new CustomEvent('guru:thinking', { detail: true }))
+
   try {
     const res = await fetch(`${getBackendBaseURL()}/api/guru/react`, {
       method: 'POST',
@@ -56,11 +74,22 @@ export async function fireGuruObserver(
 
     if (!res.ok) return
 
-    const data = (await res.json()) as { reaction?: string }
+    const data = (await res.json()) as { reaction?: string; move?: string }
+
     if (data.reaction && typeof data.reaction === 'string' && data.reaction.trim()) {
       onReaction(data.reaction.trim())
     }
+
+    // Dispatch move event — sprite picks it up independently
+    if (data.move && typeof data.move === 'string' && VALID_MOVES.has(data.move)) {
+      window.dispatchEvent(
+        new CustomEvent<GuruMove>('guru:move', { detail: data.move as GuruMove }),
+      )
+    }
   } catch {
     // Silently swallow — Guru is decorative, never block UX
+  } finally {
+    // Always clear thinking ring
+    window.dispatchEvent(new CustomEvent('guru:thinking', { detail: false }))
   }
 }

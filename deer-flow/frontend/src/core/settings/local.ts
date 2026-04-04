@@ -23,8 +23,8 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   },
   guru: {
     muted: false,
-    /** Name of the model (config key) to use for Guru reactions. null = use cheapest available. */
-    model_name: null,
+    /** Name of the model (config key) to use for Guru reactions. "lfm" = fast 1.2B default. */
+    model_name: "lfm",
   },
 };
 
