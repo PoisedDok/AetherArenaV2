@@ -8,10 +8,55 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from app.gateway.path_utils import resolve_thread_virtual_path
+from deerflow.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["artifacts"])
+
+
+def _build_tree(root: Path, base_virtual: str) -> list[dict]:
+    """Recursively build a tree of files/dirs under root.
+
+    Each node: { name, path (virtual), type: "file"|"dir", children? }
+    """
+    nodes: list[dict] = []
+    try:
+        items = sorted(root.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+    except PermissionError:
+        return nodes
+
+    for item in items:
+        virtual = f"{base_virtual}/{item.name}"
+        if item.is_dir():
+            children = _build_tree(item, virtual)
+            nodes.append({"name": item.name, "path": virtual, "type": "dir", "children": children})
+        else:
+            nodes.append({"name": item.name, "path": virtual, "type": "file"})
+    return nodes
+
+
+@router.get(
+    "/threads/{thread_id}/artifacts-tree",
+    summary="Get Thread Directory Tree",
+    description="Returns a JSON tree of all files and folders in the thread's sandbox workspace.",
+)
+async def get_artifacts_tree(thread_id: str) -> dict:
+    """Return the directory tree for the thread's user-data directory.
+
+    Returns:
+        { tree: [{ name, path, type, children? }, ...] }
+    """
+    try:
+        user_data_dir = get_paths().sandbox_user_data_dir(thread_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not user_data_dir.exists():
+        return {"tree": []}
+
+    tree = _build_tree(user_data_dir, "/mnt/user-data")
+    return {"tree": tree}
 
 
 def is_text_file_by_content(path: Path, sample_size: int = 8192) -> bool:

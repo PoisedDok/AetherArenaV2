@@ -20,7 +20,10 @@ export interface ArtifactsContextType {
   selectedArtifact: string | null;
   autoSelect: boolean;
   select: (artifact: string, autoSelect?: boolean) => void;
+  /** Clear the selected artifact and return to the list panel (does NOT close the panel). */
   deselect: () => void;
+  /** Close the panel entirely (and clear selection). */
+  closePanel: () => void;
 
   open: boolean;
   autoOpen: boolean;
@@ -60,9 +63,17 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     [setSidebarOpen, setSelectedArtifact, setAutoSelect],
   );
 
+  // Go back to the list without closing the panel
   const deselect = useCallback(() => {
     setSelectedArtifact(null);
     setAutoSelect(true);
+  }, []);
+
+  // Close the panel entirely
+  const closePanel = useCallback(() => {
+    setSelectedArtifact(null);
+    setAutoSelect(false);
+    setAutoOpen(false);
     setOpen(false);
   }, []);
 
@@ -92,6 +103,7 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     selectedArtifact,
     select,
     deselect,
+    closePanel,
     resetAutoOpen,
   };
 

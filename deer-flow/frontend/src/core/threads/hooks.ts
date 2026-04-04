@@ -455,14 +455,45 @@ export function useThreadStream({
     [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient],
   );
 
-  // Merge thread with optimistic messages for display
-  const mergedThread =
-    optimisticMessages.length > 0
-      ? ({
-          ...thread,
-          messages: [...thread.messages, ...optimisticMessages],
-        } as typeof thread)
-      : thread;
+  // Merge thread with optimistic messages for display.
+  // Deduplicate: skip an optimistic human message if a real message with the
+  // same text content already exists in thread.messages (happens after stop+resubmit
+  // when the SDK reconnects and thread.messages already includes the human message).
+  const mergedThread = (() => {
+    if (optimisticMessages.length === 0) return thread;
+    const realHumanTexts = new Set(
+      thread.messages
+        .filter((m) => m.type === "human")
+        .map((m) => {
+          if (typeof m.content === "string") return m.content.trim();
+          if (Array.isArray(m.content)) {
+            return m.content
+              .map((c) => (c.type === "text" ? c.text : ""))
+              .join("")
+              .trim();
+          }
+          return "";
+        }),
+    );
+    const deduped = optimisticMessages.filter((m) => {
+      if (m.type !== "human") return true;
+      const text =
+        typeof m.content === "string"
+          ? m.content.trim()
+          : Array.isArray(m.content)
+            ? m.content
+                .map((c) => (c.type === "text" ? c.text : ""))
+                .join("")
+                .trim()
+            : "";
+      return !realHumanTexts.has(text);
+    });
+    if (deduped.length === 0) return thread;
+    return {
+      ...thread,
+      messages: [...thread.messages, ...deduped],
+    } as typeof thread;
+  })();
 
   return [mergedThread, sendMessage, isUploading] as const;
 }

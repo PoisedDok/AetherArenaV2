@@ -103,24 +103,30 @@ export function groupMessages<T>(
           type: "assistant:subagent",
           messages: [message],
         });
-      } else if (hasReasoning(message) || hasToolCalls(message)) {
-        const lastGroup = groups[groups.length - 1];
-        // Accumulate consecutive intermediate AI messages into one processing group.
-        if (lastGroup?.type !== "assistant:processing") {
-          groups.push({
-            id: message.id,
-            type: "assistant:processing",
-            messages: [message],
-          });
-        } else {
-          lastGroup.messages.push(message);
+      } else {
+        // For messages with content + tool calls: push the content bubble FIRST so it
+        // renders before the tool trace, then push/accumulate the processing group AFTER
+        // so that subsequent tool result messages can still attach to it (lastOpenGroup
+        // returns the last non-closed group, which will be assistant:processing).
+        if (hasContent(message)) {
+          groups.push({ id: message.id, type: "assistant", messages: [message] });
         }
-      }
 
-      // Not an else-if: a message with reasoning + content (but no tool calls) goes
-      // into the processing group above AND gets its own assistant bubble here.
-      if (hasContent(message) && !hasToolCalls(message)) {
-        groups.push({ id: message.id, type: "assistant", messages: [message] });
+        if (hasReasoning(message) || hasToolCalls(message)) {
+          const lastGroup = groups[groups.length - 1];
+          // Accumulate consecutive intermediate AI messages into one processing group.
+          // Note: after pushing an assistant bubble above, lastGroup is now "assistant"
+          // (closed), so we always create a new processing group here.
+          if (lastGroup?.type === "assistant:processing") {
+            lastGroup.messages.push(message);
+          } else {
+            groups.push({
+              id: message.id,
+              type: "assistant:processing",
+              messages: [message],
+            });
+          }
+        }
       }
     }
   }

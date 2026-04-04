@@ -11,8 +11,6 @@ export const ArtifactTrigger = () => {
   const {
     artifacts,
     writeFileArtifacts,
-    selectedArtifact,
-    select,
     setOpen: setArtifactsOpen,
   } = useArtifacts();
 
@@ -27,10 +25,6 @@ export const ArtifactTrigger = () => {
   }
 
   const handleClick = () => {
-    // If nothing is currently selected but we have write-file artifacts, re-select the last one
-    if (!selectedArtifact && writeFileArtifacts.length > 0) {
-      select(writeFileArtifacts[writeFileArtifacts.length - 1]!);
-    }
     setArtifactsOpen(true);
   };
 
