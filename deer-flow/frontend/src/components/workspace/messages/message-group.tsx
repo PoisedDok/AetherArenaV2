@@ -209,29 +209,32 @@ function ToolCall({
     )?.results;
     return (
       <ChainOfThoughtStep key={id} label={label} icon={SearchIcon}>
-        {Array.isArray(results) && (
+        {Array.isArray(results) && results.length > 0 && (
           <ChainOfThoughtSearchResults>
-            {Array.isArray(results) &&
-              results.map((item) => (
-                <Tooltip key={item.image_url} content={item.title}>
-                  <a
-                    className="size-24 overflow-hidden rounded-lg object-cover"
-                    href={item.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <div className="bg-accent size-24">
-                      <img
-                        className="size-full object-cover"
-                        src={item.thumbnail_url}
-                        alt={item.title}
-                        width={100}
-                        height={100}
-                      />
-                    </div>
-                  </a>
-                </Tooltip>
-              ))}
+            {results.map((item) => (
+              <Tooltip key={item.image_url || item.thumbnail_url} content={item.title}>
+                <a
+                  className="block size-20 shrink-0 overflow-hidden rounded-md ring-1 ring-black/10 transition-opacity hover:opacity-80 dark:ring-white/10"
+                  href={item.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <img
+                    className="size-full object-cover"
+                    src={item.thumbnail_url || item.image_url}
+                    alt={item.title}
+                    width={80}
+                    height={80}
+                    onError={(e) => {
+                      // Fall back to full image if thumbnail fails
+                      if (item.image_url && e.currentTarget.src !== item.image_url) {
+                        e.currentTarget.src = item.image_url;
+                      }
+                    }}
+                  />
+                </a>
+              </Tooltip>
+            ))}
           </ChainOfThoughtSearchResults>
         )}
       </ChainOfThoughtStep>
@@ -404,17 +407,22 @@ function convertToSteps(messages: Message[]): CoTStep[] {
         };
         steps.push(step);
       }
-      // Extract content text (e.g., "Let me search for that...") from AI messages
-      // This ensures text content is not lost when there are also tool calls
-      const content = extractContentFromMessage(message);
-      if (content) {
-        const step: CoTContentStep = {
-          id: message.id + "-content",
-          messageId: message.id,
-          type: "content",
-          content,
-        };
-        steps.push(step);
+      // Only show content inside the processing group when there are NO tool calls.
+      // When an AI message has content + tool calls, groupMessages() already renders
+      // the content as a standalone assistant bubble — duplicating it here causes the
+      // text to appear twice (once above, once inside the "Working…" container).
+      const hasCalls = (message.tool_calls ?? []).length > 0;
+      if (!hasCalls) {
+        const content = extractContentFromMessage(message);
+        if (content) {
+          const step: CoTContentStep = {
+            id: message.id + "-content",
+            messageId: message.id,
+            type: "content",
+            content,
+          };
+          steps.push(step);
+        }
       }
       for (const tool_call of message.tool_calls ?? []) {
         if (tool_call.name === "task") {

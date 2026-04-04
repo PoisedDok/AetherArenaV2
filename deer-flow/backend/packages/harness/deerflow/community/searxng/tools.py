@@ -54,11 +54,15 @@ def web_search_tool(query: str) -> str:
     for r in raw[:max_results]:
         if not isinstance(r, dict):
             continue
-        results.append(
-            {
-                "title": r.get("title", ""),
-                "url": r.get("url", ""),
-                "snippet": r.get("content", ""),
-            }
-        )
+        entry: dict[str, str] = {
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "snippet": r.get("content", ""),
+        }
+        # SearXNG includes img_src for image-category results
+        if r.get("img_src"):
+            entry["img_src"] = r["img_src"]
+        if r.get("thumbnail_src"):
+            entry["thumbnail_src"] = r["thumbnail_src"]
+        results.append(entry)
     return json.dumps(results, indent=2, ensure_ascii=False)

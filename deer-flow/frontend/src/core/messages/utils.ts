@@ -14,8 +14,6 @@ interface AssistantMessageGroup extends GenericMessageGroup<"assistant"> {}
 
 interface AssistantPresentFilesGroup extends GenericMessageGroup<"assistant:present-files"> {}
 
-interface AssistantClarificationGroup extends GenericMessageGroup<"assistant:clarification"> {}
-
 interface AssistantSubagentGroup extends GenericMessageGroup<"assistant:subagent"> {}
 
 type MessageGroup =
@@ -23,7 +21,6 @@ type MessageGroup =
   | AssistantProcessingGroup
   | AssistantMessageGroup
   | AssistantPresentFilesGroup
-  | AssistantClarificationGroup
   | AssistantSubagentGroup;
 
 export function groupMessages<T>(
@@ -58,25 +55,14 @@ export function groupMessages<T>(
     }
 
     if (message.type === "tool") {
-      if (isClarificationToolMessage(message)) {
-        // Add to the preceding processing group to preserve tool-call association,
-        // then also open a standalone clarification group for prominent display.
-        lastOpenGroup()?.messages.push(message);
-        groups.push({
-          id: message.id,
-          type: "assistant:clarification",
-          messages: [message],
-        });
+      const open = lastOpenGroup();
+      if (open) {
+        open.messages.push(message);
       } else {
-        const open = lastOpenGroup();
-        if (open) {
-          open.messages.push(message);
-        } else {
-          console.error(
-            "Unexpected tool message outside a processing group",
-            message,
-          );
-        }
+        console.error(
+          "Unexpected tool message outside a processing group",
+          message,
+        );
       }
       continue;
     }
@@ -282,10 +268,6 @@ export function hasPresentFiles(message: Message) {
     message.type === "ai" &&
     message.tool_calls?.some((toolCall) => toolCall.name === "present_files")
   );
-}
-
-export function isClarificationToolMessage(message: Message) {
-  return message.type === "tool" && message.name === "ask_clarification";
 }
 
 export function extractPresentFilesFromMessage(message: Message) {

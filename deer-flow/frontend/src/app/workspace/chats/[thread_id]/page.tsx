@@ -99,27 +99,23 @@ export default function ChatPage() {
                 paddingBottom={24}
               />
             </div>
-            <div className="z-30 flex shrink-0 justify-center px-4 pb-4">
+            <div className="z-30 flex shrink-0 flex-col items-center px-4 pb-4">
               <div
                 className={cn(
-                  "relative w-full",
+                  "w-full",
                   isNewThread && "-translate-y-[calc(50vh-96px)]",
                   isNewThread
                     ? "max-w-(--container-width-sm)"
                     : "max-w-(--container-width-md)",
                 )}
               >
-                <div className="relative z-0">
-                  <div className="absolute right-0 bottom-full left-0">
-                    <TodoList
-                      className="bg-background/5"
-                      todos={thread.values.todos ?? []}
-                      hidden={
-                        !thread.values.todos || thread.values.todos.length === 0
-                      }
-                    />
-                  </div>
-                </div>
+                <TodoList
+                  className="translate-y-0 bg-background/5"
+                  todos={thread.values.todos ?? []}
+                  hidden={
+                    !thread.values.todos || thread.values.todos.length === 0
+                  }
+                />
                 <InputBox
                   className={cn("bg-background/5 w-full")}
                   isNewThread={isNewThread}

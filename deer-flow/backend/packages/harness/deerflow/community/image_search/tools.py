@@ -119,8 +119,9 @@ def image_search_tool(
     normalized_results = [
         {
             "title": r.get("title", ""),
-            "image_url": r.get("thumbnail", ""),
-            "thumbnail_url": r.get("thumbnail", ""),
+            "source_url": r.get("url", ""),
+            "image_url": r.get("image", r.get("thumbnail", "")),
+            "thumbnail_url": r.get("thumbnail", r.get("image", "")),
         }
         for r in results
     ]
@@ -129,7 +130,7 @@ def image_search_tool(
         "query": query,
         "total_results": len(normalized_results),
         "results": normalized_results,
-        "usage_hint": "Use the 'image_url' values as reference images in image generation. Download them first if needed.",
+        "usage_hint": "Use 'image_url' for full-size reference images in generation. Use 'thumbnail_url' for previews. 'source_url' links to the source page.",
     }
 
     return json.dumps(output, indent=2, ensure_ascii=False)
