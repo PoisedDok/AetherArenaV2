@@ -72,12 +72,12 @@ import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
-import { useToolGroups } from "@/core/tool-groups/hooks";
 import type { Model } from "@/core/models/types";
 import { useLocalSettings } from "@/core/settings";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { AgentThreadContext } from "@/core/threads";
 import { textOfMessage } from "@/core/threads/utils";
+import { useToolGroups } from "@/core/tool-groups/hooks";
 import { cn } from "@/lib/utils";
 
 import {
@@ -207,7 +207,7 @@ export function InputBox({
   onSubmit?: (message: PromptInputMessage) => void;
   onStop?: () => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [localSettings] = useLocalSettings();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -432,7 +432,6 @@ export function InputBox({
         messages: recent,
         n: 3,
         model_name: context.model_name ?? undefined,
-        locale,
       }),
       signal: controller.signal,
     })
@@ -461,7 +460,6 @@ export function InputBox({
     context.model_name,
     disabled,
     isMock,
-    locale,
     localSettings.behavior.auto_followup,
     status,
     thread.messages,

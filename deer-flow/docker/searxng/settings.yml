@@ -4,7 +4,8 @@ general:
   instance_name: 'searxng'
 
 search:
-  autocomplete: 'google'
+  safe_search: 0
+  autocomplete: ''
   formats:
     - html
     - json
@@ -14,6 +15,109 @@ server:
   limiter: false
   method: "POST"
 
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+  pool_connections: 10
+  pool_maxsize: 10
+  enable_http2: false
+  retries: 1
+
 engines:
-  - name: wolframalpha
+  # ── WORKING ─────────────────────────────────────────────────────────────────
+
+  # General web search — Bing works reliably without bot blocks
+  - name: bing
+    engine: bing
+    shortcut: b
     disabled: false
+
+  # News — Bing News is reliable
+  - name: bing news
+    engine: bing news
+    shortcut: bn
+    disabled: false
+
+  # Wikipedia — always reliable, great for factual lookups
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  # Reddit — works, good for community/opinion searches
+  - name: reddit
+    engine: reddit
+    shortcut: re
+    disabled: false
+
+  # HackerNews — works, good for tech/startup topics
+  - name: hackernews
+    engine: hackernews
+    shortcut: hn
+    disabled: false
+
+  # arXiv — works, essential for research/academic queries
+  - name: arxiv
+    engine: arxiv
+    shortcut: ax
+    disabled: false
+
+  # GitHub — works, useful for code search
+  - name: github
+    engine: github
+    shortcut: gh
+    disabled: false
+
+  # StackOverflow / StackExchange — works, good for technical Q&A
+  - name: stackoverflow
+    engine: stackexchange
+    shortcut: so
+    api_site: 'stackoverflow'
+    disabled: false
+
+  # WolframAlpha — works for math/science/factual computation
+  - name: wolframalpha
+    engine: wolframalpha
+    shortcut: wa
+    disabled: false
+
+  # ── BLOCKED / UNRELIABLE ────────────────────────────────────────────────────
+
+  # Google — 403 bot detection, consistently blocked
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: true
+
+  - name: google news
+    engine: google news
+    shortcut: gn
+    disabled: true
+
+  - name: google scholar
+    engine: google scholar
+    shortcut: gs
+    disabled: true
+
+  # DuckDuckGo — TCP timeouts, connection refused from container
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: true
+
+  - name: duckduckgo news
+    engine: duckduckgo news
+    shortcut: ddgn
+    disabled: true
+
+  # Brave — 429 rate limits
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: true
+
+  # Qwant — unreliable
+  - name: qwant
+    engine: qwant
+    shortcut: qw
+    disabled: true

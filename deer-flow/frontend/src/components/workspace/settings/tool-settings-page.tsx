@@ -15,8 +15,8 @@ import { useEnableMCPServer, useMCPConfig } from "@/core/mcp/hooks";
 import type { MCPServerConfig } from "@/core/mcp/types";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { Skill } from "@/core/skills/type";
-import { useEnableToolGroup, useToolGroups } from "@/core/tool-groups/hooks";
 import type { ToolGroup } from "@/core/tool-groups/api";
+import { useEnableToolGroup, useToolGroups } from "@/core/tool-groups/hooks";
 import { env } from "@/env";
 
 import { SettingsSection } from "./settings-section";

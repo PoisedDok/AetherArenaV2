@@ -19,12 +19,12 @@ import { useMemo, useRef, useState, useCallback } from "react";
 import { useI18n } from "@/core/i18n/hooks";
 import { useModels } from "@/core/models/hooks";
 import type { Model } from "@/core/models/types";
+import type { ProviderModel } from "@/core/providers/api";
 import {
   PROVIDER_DEFINITIONS,
   matchProviderForModel,
   type ProviderDefinition,
 } from "@/core/providers/definitions";
-import type { ProviderModel } from "@/core/providers/api";
 import {
   useFetchProviderModels,
   useOpenRouterModels,
@@ -428,7 +428,7 @@ function CloudKeySection({
     if (testResult) { resetTest(); resetModels(); }
   };
 
-  const liveModels = modelsResult?.models ?? [];
+  const liveModels = useMemo(() => modelsResult?.models ?? [], [modelsResult?.models]);
 
   const filteredModels = useMemo(() => {
     if (!search.trim()) return liveModels;
@@ -604,7 +604,7 @@ function ManualModelInput({
 function LocalProviderSection({
   providerId,
   isReachable,
-  localUrl,
+  localUrl: _localUrl,
   selectedChatName,
   selectedVisionName,
   onRequestSelect,

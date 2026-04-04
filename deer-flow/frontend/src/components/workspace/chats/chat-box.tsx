@@ -23,8 +23,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { urlOfArtifact } from "@/core/artifacts/utils";
-import { env } from "@/env";
 import { getBackendBaseURL } from "@/core/config";
+import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileDetail, useArtifacts } from "../artifacts";
@@ -248,9 +248,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   const {
     artifacts,
-    writeFileArtifacts,
     open: artifactsOpen,
-    setOpen: setArtifactsOpen,
     setArtifacts,
     setWriteFileArtifacts,
     select: selectArtifact,

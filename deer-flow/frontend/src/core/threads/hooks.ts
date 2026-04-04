@@ -189,15 +189,18 @@ export function useThreadStream({
   // Track message count before sending so we know when server has responded
   const prevMsgCountRef = useRef(thread.messages.length);
 
-  // Clear optimistic when server messages arrive (count increases)
+  // Messages frozen at stop time — keeps partial streamed content visible until
+  // the next submit's server response arrives and replaces them.
+  const [frozenMessages, setFrozenMessages] = useState<Message[] | null>(null);
+
+  // Clear optimistic + frozen when server messages arrive (count increases past
+  // what we saw before the submit).
   useEffect(() => {
-    if (
-      optimisticMessages.length > 0 &&
-      thread.messages.length > prevMsgCountRef.current
-    ) {
-      setOptimisticMessages([]);
+    if (thread.messages.length > prevMsgCountRef.current) {
+      if (optimisticMessages.length > 0) setOptimisticMessages([]);
+      if (frozenMessages !== null) setFrozenMessages(null);
     }
-  }, [thread.messages.length, optimisticMessages.length]);
+  }, [thread.messages.length, optimisticMessages.length, frozenMessages]);
 
   const sendMessage = useCallback(
     async (
@@ -212,8 +215,13 @@ export function useThreadStream({
 
       const text = message.text.trim();
 
-      // Capture current count before showing optimistic messages
-      prevMsgCountRef.current = thread.messages.length;
+      // Capture current count before showing optimistic messages.
+      // Use frozenMessages length if available (after a stop, thread.messages
+      // reverts to the checkpoint and may be shorter than what the user saw).
+      const baseMessages = frozenMessages ?? thread.messages;
+      prevMsgCountRef.current = baseMessages.length;
+      // Clear frozen now that a new submit is underway
+      setFrozenMessages(null);
 
       // Build optimistic files list with uploading status
       const optimisticFiles: FileInMessage[] = (message.files ?? []).map(
@@ -452,17 +460,41 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient],
+    [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient, frozenMessages],
   );
 
-  // Merge thread with optimistic messages for display.
-  // Deduplicate: skip an optimistic human message if a real message with the
-  // same text content already exists in thread.messages (happens after stop+resubmit
-  // when the SDK reconnects and thread.messages already includes the human message).
+  // Wrap thread.stop() to freeze visible messages before the SDK reverts them.
+  // After stop(), thread.messages reverts to the last checkpoint (dropping partial
+  // streaming content). We capture the current messages first so the UI keeps
+  // showing them until the next submit's server response arrives.
+  const stopStream = useCallback(async () => {
+    // Capture what the user can currently see (optimistic + real)
+    const currentlyVisible =
+      optimisticMessages.length > 0
+        ? [...thread.messages, ...optimisticMessages]
+        : thread.messages.length > 0
+          ? [...thread.messages]
+          : null;
+    if (currentlyVisible && currentlyVisible.length > 0) {
+      setFrozenMessages(currentlyVisible);
+    }
+    await thread.stop();
+  }, [thread, optimisticMessages]);
+
+  // Merge thread with optimistic/frozen messages for display.
+  // Priority: if frozenMessages exist, use them as the base (they include partial
+  // streamed content captured at stop time). Otherwise use thread.messages.
+  // On top of either base, append any pending optimistic messages (deduplicated).
   const mergedThread = (() => {
-    if (optimisticMessages.length === 0) return thread;
+    const baseMessages = frozenMessages ?? thread.messages;
+
+    if (optimisticMessages.length === 0) {
+      if (frozenMessages === null) return thread;
+      return { ...thread, messages: frozenMessages } as typeof thread;
+    }
+
     const realHumanTexts = new Set(
-      thread.messages
+      baseMessages
         .filter((m) => m.type === "human")
         .map((m) => {
           if (typeof m.content === "string") return m.content.trim();
@@ -488,14 +520,22 @@ export function useThreadStream({
             : "";
       return !realHumanTexts.has(text);
     });
-    if (deduped.length === 0) return thread;
+    if (deduped.length === 0) {
+      return { ...thread, messages: baseMessages } as typeof thread;
+    }
     return {
       ...thread,
-      messages: [...thread.messages, ...deduped],
+      messages: [...baseMessages, ...deduped],
     } as typeof thread;
   })();
 
-  return [mergedThread, sendMessage, isUploading] as const;
+  // Expose stopStream instead of raw thread.stop so callers get the freeze behaviour.
+  const mergedThreadWithStop = {
+    ...mergedThread,
+    stop: stopStream,
+  };
+
+  return [mergedThreadWithStop, sendMessage, isUploading] as const;
 }
 
 export function useThreads(
