@@ -50,12 +50,12 @@ export default function WorkspaceLayout({
     <QueryClientProvider client={queryClient}>
       <WindowTitlebar />
       <SidebarProvider
-        className="h-screen"
+        className="h-screen overflow-hidden"
         open={open}
         onOpenChange={handleOpenChange}
       >
         <WorkspaceSidebar />
-        <SidebarInset className="min-w-0">{children}</SidebarInset>
+        <SidebarInset className="min-w-0 overflow-hidden">{children}</SidebarInset>
       </SidebarProvider>
       <CommandPalette />
       <Toaster position="top-center" />

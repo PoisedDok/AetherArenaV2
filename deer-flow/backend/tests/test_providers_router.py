@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 
 from app.gateway.routers.providers import (
+    _fetch_openrouter_models_public,
+    _fetch_provider_models,
     _probe_lmstudio,
     _probe_ollama,
     _test_cloud_key,
@@ -166,3 +168,111 @@ def test_cloud_key_google_uses_query_param():
 
     assert len(captured_urls) == 1
     assert "key=AIza-testkey" in captured_urls[0]
+
+
+# ── Fetch provider models ─────────────────────────────────────────────────────
+
+def test_fetch_openai_models_returns_list():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "data": [{"id": "gpt-4o"}, {"id": "gpt-3.5-turbo"}, {"id": "gpt-4-vision"}]
+    }
+
+    with patch("app.gateway.routers.providers.httpx.AsyncClient", return_value=_make_mock_client(mock_response)):
+        result = _run(_fetch_provider_models("openai", "sk-test"))
+
+    assert result.error is None
+    assert len(result.models) == 3
+    model_ids = [m.id for m in result.models]
+    assert "gpt-4o" in model_ids
+
+
+def test_fetch_openai_models_invalid_key():
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("app.gateway.routers.providers.httpx.AsyncClient", return_value=_make_mock_client(mock_response)):
+        result = _run(_fetch_provider_models("openai", "bad-key"))
+
+    assert result.error == "Invalid API key"
+    assert result.models == []
+
+
+def test_fetch_anthropic_models_returns_list():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "data": [
+            {"id": "claude-3-5-sonnet-20241022", "display_name": "Claude 3.5 Sonnet"},
+            {"id": "claude-3-opus-20240229", "display_name": "Claude 3 Opus"},
+        ]
+    }
+
+    with patch("app.gateway.routers.providers.httpx.AsyncClient", return_value=_make_mock_client(mock_response)):
+        result = _run(_fetch_provider_models("anthropic", "sk-ant-test"))
+
+    assert result.error is None
+    assert len(result.models) == 2
+    assert result.models[0].name == "Claude 3.5 Sonnet"
+
+
+def test_fetch_google_models_filters_non_generative():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "models": [
+            {"name": "models/gemini-1.5-pro", "displayName": "Gemini 1.5 Pro", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/embedding-001", "displayName": "Embedding 001", "supportedGenerationMethods": ["embedContent"]},
+        ]
+    }
+
+    with patch("app.gateway.routers.providers.httpx.AsyncClient", return_value=_make_mock_client(mock_response)):
+        result = _run(_fetch_provider_models("google", "AIza-test"))
+
+    assert result.error is None
+    # embedding model should be filtered out
+    assert len(result.models) == 1
+    assert result.models[0].id == "gemini-1.5-pro"
+
+
+def test_fetch_unknown_provider_returns_error():
+    result = _run(_fetch_provider_models("unknown_provider", "key"))
+    assert result.models == []
+    assert result.error is not None
+    assert "Unknown provider" in result.error
+
+
+def test_fetch_openrouter_models_public():
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": "google/gemma-3-27b-it:free",
+                "name": "Google: Gemma 3 27B (free)",
+                "pricing": {"prompt": "0", "completion": "0"},
+                "architecture": {"input_modalities": ["text"]},
+            },
+            {
+                "id": "anthropic/claude-3.5-sonnet",
+                "name": "Anthropic: Claude 3.5 Sonnet",
+                "pricing": {"prompt": "0.000003", "completion": "0.000015"},
+                "architecture": {"input_modalities": ["text", "image"]},
+            },
+        ]
+    }
+
+    with patch("app.gateway.routers.providers.httpx.AsyncClient", return_value=_make_mock_client(mock_response)):
+        result = _run(_fetch_openrouter_models_public())
+
+    assert len(result) == 2
+    free_model = next(m for m in result if m.id == "google/gemma-3-27b-it:free")
+    assert free_model.is_free is True
+    paid_model = next(m for m in result if "claude" in m.id)
+    assert paid_model.is_free is False
+    assert paid_model.supports_vision is True

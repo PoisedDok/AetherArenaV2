@@ -121,15 +121,16 @@ export default function AgentChatPage() {
           </header>
 
           <main className="flex min-h-0 max-w-full grow flex-col">
-            <div className="flex size-full justify-center">
+            <div className="flex min-h-0 flex-1 justify-center">
               <MessageList
-                className={cn("size-full", !isNewThread && "pt-10")}
+                className={cn("size-full", !isNewThread && "pt-12")}
                 threadId={threadId}
                 thread={thread}
+                paddingBottom={24}
               />
             </div>
 
-            <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
+            <div className="z-30 flex shrink-0 justify-center px-4 pb-4">
               <div
                 className={cn(
                   "relative w-full",
@@ -139,8 +140,8 @@ export default function AgentChatPage() {
                     : "max-w-(--container-width-md)",
                 )}
               >
-                <div className="absolute -top-4 right-0 left-0 z-0">
-                  <div className="absolute right-0 bottom-0 left-0">
+                <div className="relative z-0">
+                  <div className="absolute right-0 bottom-full left-0">
                     <TodoList
                       className="bg-background/5"
                       todos={thread.values.todos ?? []}
@@ -152,7 +153,7 @@ export default function AgentChatPage() {
                 </div>
 
                 <InputBox
-                  className={cn("bg-background/5 w-full -translate-y-4")}
+                  className={cn("bg-background/5 w-full")}
                   isNewThread={isNewThread}
                   threadId={threadId}
                   autoFocus={isNewThread}
