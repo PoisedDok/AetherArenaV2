@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from deerflow.agents.memory.updater import _save_memory_to_file, get_memory_data, reload_memory_data
-from deerflow.config.memory_config import get_memory_config
+from deerflow.config.memory_config import get_memory_config, set_memory_config
 
 router = APIRouter(prefix="/api", tags=["memory"])
 
@@ -59,6 +59,7 @@ class MemoryConfigResponse(BaseModel):
     enabled: bool = Field(..., description="Whether memory is enabled")
     storage_path: str = Field(..., description="Path to memory storage file")
     debounce_seconds: int = Field(..., description="Debounce time for memory updates")
+    model_name: str | None = Field(default=None, description="Model name for memory updates (null = default)")
     max_facts: int = Field(..., description="Maximum number of facts to store")
     fact_confidence_threshold: float = Field(..., description="Minimum confidence threshold for facts")
     injection_enabled: bool = Field(..., description="Whether memory injection is enabled")
@@ -165,6 +166,7 @@ async def get_memory_config_endpoint() -> MemoryConfigResponse:
         enabled=config.enabled,
         storage_path=config.storage_path,
         debounce_seconds=config.debounce_seconds,
+        model_name=config.model_name,
         max_facts=config.max_facts,
         fact_confidence_threshold=config.fact_confidence_threshold,
         injection_enabled=config.injection_enabled,
@@ -192,6 +194,7 @@ async def get_memory_status() -> MemoryStatusResponse:
             enabled=config.enabled,
             storage_path=config.storage_path,
             debounce_seconds=config.debounce_seconds,
+            model_name=config.model_name,
             max_facts=config.max_facts,
             fact_confidence_threshold=config.fact_confidence_threshold,
             injection_enabled=config.injection_enabled,
@@ -215,6 +218,42 @@ class UpdateSectionRequest(BaseModel):
 
     section: str = Field(..., description="Dot-path to section, e.g. 'user.workContext'")
     summary: str = Field(..., description="New summary text")
+
+
+class UpdateMemoryConfigRequest(BaseModel):
+    """Request body for updating memory configuration."""
+
+    model_name: str | None = Field(default=None, description="Model name for memory updates (null = default)")
+
+
+# ── Config mutation ────────────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/memory/config",
+    response_model=MemoryConfigResponse,
+    summary="Update memory configuration",
+    description="Update mutable memory system configuration from the frontend.",
+)
+async def update_memory_config(body: UpdateMemoryConfigRequest) -> MemoryConfigResponse:
+    """Update memory configuration (e.g. model_name).
+
+    Persists the change via set_memory_config so the next update uses the selected model.
+    """
+    existing = get_memory_config()
+    updated = existing.model_copy(update={"model_name": body.model_name})
+    set_memory_config(updated)
+
+    return MemoryConfigResponse(
+        enabled=updated.enabled,
+        storage_path=updated.storage_path,
+        debounce_seconds=updated.debounce_seconds,
+        model_name=updated.model_name,
+        max_facts=updated.max_facts,
+        fact_confidence_threshold=updated.fact_confidence_threshold,
+        injection_enabled=updated.injection_enabled,
+        max_injection_tokens=updated.max_injection_tokens,
+    )
 
 
 # ── Fact mutation endpoints ────────────────────────────────────────────────────

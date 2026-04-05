@@ -292,6 +292,7 @@ def make_lead_agent(config: RunnableConfig):
     max_concurrent_subagents = cfg.get("max_concurrent_subagents", 3)
     is_bootstrap = cfg.get("is_bootstrap", False)
     agent_name = cfg.get("agent_name")
+    provider_api_key = cfg.get("provider_api_key")
 
     agent_config = load_agent_config(agent_name) if not is_bootstrap else None
     # Custom agent model or fallback to global/default model resolution
@@ -311,6 +312,12 @@ def make_lead_agent(config: RunnableConfig):
             provider_name = model_name.split("/")[0]
             model_config = app_config.get_model_config(provider_name)
 
+        # Handle OpenRouter model IDs (e.g., 'qwen/qwen3.6-plus:free', 'openai/gpt-4o')
+        # These have format 'author/model' not 'provider/model', so the first-slash heuristic fails.
+        # Fall back to the 'openrouter' provider entry which carries the correct base_url.
+        if model_config is None:
+            model_config = app_config.get_model_config("openrouter")
+
     if model_config is None:
         raise ValueError("No chat model could be resolved. Please configure at least one model in config.yaml or provide a valid 'model_name'/'model' in the request.")
     if thinking_enabled and not model_config.supports_thinking:
@@ -318,11 +325,12 @@ def make_lead_agent(config: RunnableConfig):
         thinking_enabled = False
 
     logger.info(
-        "Create Agent(%s) -> thinking_enabled: %s, reasoning_effort: %s, model_name: %s, is_plan_mode: %s, subagent_enabled: %s, max_concurrent_subagents: %s",
+        "Create Agent(%s) -> thinking_enabled: %s, reasoning_effort: %s, model_name: %s, api_key_provider: %s, is_plan_mode: %s, subagent_enabled: %s, max_concurrent_subagents: %s",
         agent_name or "default",
         thinking_enabled,
         reasoning_effort,
         model_name,
+        "runtime" if provider_api_key else "config",
         is_plan_mode,
         subagent_enabled,
         max_concurrent_subagents,
@@ -346,7 +354,7 @@ def make_lead_agent(config: RunnableConfig):
     if is_bootstrap:
         # Special bootstrap agent with minimal prompt for initial custom agent creation flow
         return create_agent(
-            model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
+            model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, provider_api_key=provider_api_key),
             tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled) + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
             system_prompt=apply_prompt_template(subagent_enabled=subagent_enabled, max_concurrent_subagents=max_concurrent_subagents, available_skills=set(["bootstrap"])),
@@ -355,7 +363,7 @@ def make_lead_agent(config: RunnableConfig):
 
     # Default lead agent (unchanged behavior)
     return create_agent(
-        model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
+        model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort, provider_api_key=provider_api_key),
         tools=get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled),
         middleware=_build_middlewares(config, model_name=model_name, agent_name=agent_name),
         system_prompt=apply_prompt_template(subagent_enabled=subagent_enabled, max_concurrent_subagents=max_concurrent_subagents, agent_name=agent_name),

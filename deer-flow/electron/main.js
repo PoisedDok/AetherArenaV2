@@ -9,7 +9,7 @@
  * MIT License
  */
 
-const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme, session, safeStorage } = require('electron');
 const path = require('path');
 
 const DEERFLOW_URL = 'http://localhost:2026';
@@ -20,6 +20,20 @@ const ENABLE_NATIVE_WINDOW_EFFECTS = process.env.DEERFLOW_DISABLE_NATIVE_WINDOW_
 
 let mainWindow = null;
 
+/**
+ * Flush the default session cookie jar to disk. Electron/Chromium may defer
+ * writes, so an explicit flush ensures persistent cookies (rememberMe sessions
+ * set by better-auth) survive process restarts.
+ */
+async function flushCookies() {
+  try {
+    const defaultSession = session.fromPartition('persist:aether-arena');
+    await defaultSession.cookies.flushStore();
+  } catch {
+    /* Best-effort — do not block shutdown */
+  }
+}
+
 function registerIpcHandlers() {
   ipcMain.handle('deerflow:backend-health', async () => checkBackendHealth());
 
@@ -28,8 +42,25 @@ function registerIpcHandlers() {
     await mainWindow.loadURL(DEERFLOW_URL);
   });
 
-  ipcMain.handle('deerflow:quit-app', () => {
+  ipcMain.handle('deerflow:quit-app', async () => {
+    await flushCookies();
     app.quit();
+  });
+
+  ipcMain.handle('deerflow:safe-storage:encrypt', async (_event, plaintext) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('safeStorage encryption not available');
+    }
+    const encrypted = safeStorage.encryptString(plaintext);
+    return encrypted.toString('base64');
+  });
+
+  ipcMain.handle('deerflow:safe-storage:decrypt', async (_event, encryptedBase64) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('safeStorage encryption not available');
+    }
+    const buffer = Buffer.from(encryptedBase64, 'base64');
+    return safeStorage.decryptString(buffer);
   });
 }
 
@@ -51,6 +82,11 @@ function buildWindowOptions() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      /**
+       * Use a named persistent partition so cookies/storage survive restarts.
+       * 'persist:' prefix creates a persistent (not in-memory) session.
+       */
+      partition: 'persist:aether-arena',
     },
   };
 
@@ -162,7 +198,16 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  flushCookies();
   app.quit();
+});
+
+/**
+ * Catch all quit paths and flush the cookie jar. Chromium defers cookie
+ * writes; an explicit flush avoids losing the remember-me session.
+ */
+app.on('before-quit', () => {
+  flushCookies();
 });
 
 app.on('activate', () => {

@@ -8,13 +8,21 @@ from deerflow.reflection import resolve_class
 logger = logging.getLogger(__name__)
 
 
-def create_chat_model(name: str | None = None, thinking_enabled: bool = False, **kwargs) -> BaseChatModel:
+def create_chat_model(
+    name: str | None = None,
+    thinking_enabled: bool = False,
+    provider_api_key: str | None = None,
+    **kwargs,
+) -> BaseChatModel:
     """Create a chat model instance from the config.
 
     Args:
         name: The name of the model to create. If None, the first model in the config will be used.
               Supports both simple names (e.g., 'gpt-4o') and provider-prefixed names
               from remote endpoints (e.g., 'lmstudio/qwen/qwen3-4b-2507').
+        thinking_enabled: Whether thinking/reasoning mode is active.
+        provider_api_key: Runtime-provided API key from the frontend settings.
+                          Overrides the static config.yaml api_key for cloud providers.
 
     Returns:
         A chat model instance.
@@ -32,6 +40,11 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         config_name = provider_name
 
     model_config = config.get_model_config(config_name)
+    if model_config is None:
+        # Fallback: treat as OpenRouter model (author/model ID not provider/model)
+        model_config = config.get_model_config("openrouter")
+        if model_config is not None:
+            actual_model_id = name  # Full model ID for OpenRouter (e.g. 'qwen/qwen3.6-plus:free')
     if model_config is None:
         raise ValueError(f"Model {name} not found in config") from None
     model_class = resolve_class(model_config.use, BaseChatModel)
@@ -54,12 +67,13 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
     if actual_model_id:
         model_settings_from_config["model"] = actual_model_id
 
-    # Ensure local provider API keys take precedence over env vars (e.g., OPENAI_API_KEY)
-    # by explicitly setting api_key from config if present.
-    # Use getattr because api_key is an extra Pydantic field and may not be set.
-    _api_key = getattr(model_config, "api_key", None)
-    if _api_key:
-        model_settings_from_config["api_key"] = _api_key
+    # API key priority: runtime provider_api_key (frontend) > config api_key > env var (via LangChain default)
+    if provider_api_key:
+        model_settings_from_config["api_key"] = provider_api_key
+    else:
+        _api_key = getattr(model_config, "api_key", None)
+        if _api_key:
+            model_settings_from_config["api_key"] = _api_key
     # Compute effective when_thinking_enabled by merging in the `thinking` shortcut field.
     # The `thinking` shortcut is equivalent to setting when_thinking_enabled["thinking"].
     has_thinking_settings = (model_config.when_thinking_enabled is not None) or (model_config.thinking is not None)

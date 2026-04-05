@@ -44,4 +44,9 @@ contextBridge.exposeInMainWorld('deerflowDesktop', {
   loadMainApp: () => ipcRenderer.invoke('deerflow:load-main-app'),
 
   quitApp: () => ipcRenderer.invoke('deerflow:quit-app'),
+
+  safeStorage: {
+    encrypt: (plaintext) => ipcRenderer.invoke('deerflow:safe-storage:encrypt', plaintext),
+    decrypt: (encryptedBase64) => ipcRenderer.invoke('deerflow:safe-storage:decrypt', encryptedBase64),
+  },
 });
