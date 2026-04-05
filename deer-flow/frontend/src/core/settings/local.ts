@@ -22,8 +22,8 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     auto_memory: true,
   },
   guru: {
+    enabled: true,
     muted: false,
-    /** Name of the model (config key) to use for Guru reactions. "lfm" = fast 1.2B default. */
     model_name: "lfm",
   },
 };
@@ -56,6 +56,8 @@ export interface LocalSettings {
     auto_memory: boolean;
   };
   guru: {
+    /** Master toggle — when false, entire Guru widget is hidden. */
+    enabled: boolean;
     /** When true, Guru reactions are silenced (observer still fires, bubble never shows). */
     muted: boolean;
     /**

@@ -29,7 +29,7 @@ export const SPECIES = [
 ] as const
 export type Species = (typeof SPECIES)[number]
 
-export const EYES = ['o', 'O', '◕', '●', '◦', '^'] as const
+export const EYES = ['o', 'O', '@', '•', '*', '·'] as const
 export type Eye = (typeof EYES)[number]
 
 export const HATS = [

@@ -173,6 +173,7 @@ export function AppearanceSettingsPage() {
       <Separator />
 
       <GuruSettingsSection
+        guruEnabled={localSettings.guru.enabled}
         localSettings={localSettings}
         setLocalSettings={setLocalSettings}
       />
@@ -187,9 +188,11 @@ export function AppearanceSettingsPage() {
 type TestState = "idle" | "loading" | "ok" | "error";
 
 function GuruSettingsSection({
+  guruEnabled,
   localSettings,
   setLocalSettings,
 }: {
+  guruEnabled: boolean;
   localSettings: LocalSettings;
   setLocalSettings: (key: keyof LocalSettings, value: Partial<LocalSettings[keyof LocalSettings]>) => void;
 }) {
@@ -240,16 +243,24 @@ function GuruSettingsSection({
   return (
     <SettingsSection
       title={
-        <span className="flex items-center gap-2">
-          <BookOpenIcon className="size-4" />
-          Guru Companion
-        </span>
+        <div className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-2">
+            <BookOpenIcon className="size-4" />
+            Guru Companion
+          </span>
+          <Switch
+            checked={localSettings.guru.enabled}
+            onCheckedChange={(checked) =>
+              setLocalSettings("guru", { enabled: checked })
+            }
+          />
+        </div>
       }
       description="Your ASCII companion that watches conversations and reacts. Powered by a small, fast model."
     >
-      <div className="space-y-4 max-w-md">
+      <div className={cn("space-y-4 max-w-md transition-opacity duration-200", !guruEnabled && "opacity-50")}>
         {/* Mute toggle */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4" {...(!guruEnabled ? { "aria-disabled": true } : {})}>
           <div className="space-y-0.5">
             <div className="text-sm font-medium flex items-center gap-1.5">
               {localSettings.guru.muted ? (
@@ -265,9 +276,10 @@ function GuruSettingsSection({
           </div>
           <Switch
             checked={!localSettings.guru.muted}
-            onCheckedChange={(checked) =>
-              setLocalSettings("guru", { muted: !checked })
-            }
+            onCheckedChange={(checked) => {
+              if (guruEnabled) setLocalSettings("guru", { muted: !checked });
+            }}
+            disabled={!guruEnabled}
           />
         </div>
 
@@ -283,7 +295,7 @@ function GuruSettingsSection({
                 <Button
                   variant="outline"
                   className="flex-1 justify-between font-mono text-xs h-8"
-                  disabled={models.length === 0}
+                  disabled={!guruEnabled || models.length === 0}
                 >
                   <span className="truncate">{displayLabel}</span>
                   <ChevronDownIcon className="size-3.5 shrink-0 opacity-60" />
@@ -291,8 +303,9 @@ function GuruSettingsSection({
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-64 overflow-y-auto">
                 <DropdownMenuItem
-                  onSelect={() => setLocalSettings("guru", { model_name: null })}
+                  onSelect={() => guruEnabled && setLocalSettings("guru", { model_name: null })}
                   className={cn("text-xs font-mono gap-2", !localSettings.guru.model_name && "text-primary")}
+                  disabled={!guruEnabled}
                 >
                   {!localSettings.guru.model_name && <CheckIcon className="size-3" />}
                   <span className={localSettings.guru.model_name ? "pl-5" : ""}>Auto (default)</span>
@@ -302,8 +315,9 @@ function GuruSettingsSection({
                   return (
                     <DropdownMenuItem
                       key={model.name}
-                      onSelect={() => setLocalSettings("guru", { model_name: model.name })}
+                      onSelect={() => guruEnabled && setLocalSettings("guru", { model_name: model.name })}
                       className={cn("text-xs font-mono gap-2", active && "text-primary")}
+                      disabled={!guruEnabled}
                     >
                       {active ? (
                         <CheckIcon className="size-3 shrink-0" />
@@ -326,7 +340,7 @@ function GuruSettingsSection({
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 px-3 text-xs shrink-0"
-              disabled={testState === "loading"}
+              disabled={!guruEnabled || testState === "loading"}
               onClick={() => void runTest()}
             >
               {testState === "loading" ? (

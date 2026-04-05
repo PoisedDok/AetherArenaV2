@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { clearGuru, getGuruUserId, roll, saveGuruSoul } from '@/core/guru/guru'
-import { useGuru, useGuruIdleComments, useGuruMove, useGuruMuted, useGuruReaction, useGuruThinking } from '@/core/guru/hooks'
+import { useGuru, useGuruIdleComments, useGuruMove, useGuruMuted, useGuruReaction, useGuruThinking, useGuruEnabled } from '@/core/guru/hooks'
 import { RARITY_COLORS, RARITY_STARS, STAT_NAMES } from '@/core/guru/types'
 import { cn } from '@/lib/utils'
 
@@ -147,6 +147,7 @@ function StatsDialog({ open, onOpenChange, guru }: {
  * give this component `position: absolute bottom-full right-0` placement.
  */
 export function GuruWidget() {
+  const enabled = useGuruEnabled()
   const guru = useGuru()
   const { reaction, fading, clearReaction } = useGuruReaction()
   const [muted, setMuted] = useGuruMuted()
@@ -162,7 +163,12 @@ export function GuruWidget() {
     clearGuru()
   }, [clearReaction])
 
-  // No guru yet — show teaser pill anchored bottom-right of the input area
+  // Disabled via settings — render nothing
+  if (!enabled && guru) {
+    return null
+  }
+
+  // No guru yet — show teaser pill
   if (!guru) {
     return (
       <>

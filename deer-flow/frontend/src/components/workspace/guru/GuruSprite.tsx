@@ -41,75 +41,80 @@ const PET_HEARTS = [
 // ---------------------------------------------------------------------------
 // Move → CSS transform mapping
 // Each move is a sequence of transform steps cycled at TICK_MS
+//
+// RULES:
+//  - NO scale or scaleX — any scaling warps monospace ASCII rendering
+//  - walk-left/right = pure translation (no flip), sprite never faces wrong way
+//  - streaming = calm walk, not aggressive bounce
 // ---------------------------------------------------------------------------
-type TransformStep = { x: number; y: number; rotate: number; scale: number }
+type TransformStep = { x: number; y: number; rotate: number }
 
 const MOVE_TRANSFORMS: Record<GuruMove, TransformStep[]> = {
   idle: [
-    { x: 0, y: 0, rotate: 0, scale: 1 },
-    { x: 0, y: -1, rotate: 0, scale: 1 }, // gentle bob only
+    { x: 0, y: 0, rotate: 0 },
+    { x: 0, y: -1, rotate: 0 }, // gentle bob
   ],
   'walk-left': [
-    { x: -6, y: 0, rotate: -4, scale: 1 },
-    { x: -3, y: -2, rotate: -2, scale: 1 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
-    { x: -3, y: -2, rotate: -2, scale: 1 },
+    { x: -10, y: 0, rotate: -2 },
+    { x: -7, y: -1, rotate: -1 },
+    { x: -4, y: 0, rotate: 0 },
+    { x: -7, y: -1, rotate: -1 },
   ],
   'walk-right': [
-    { x: 6, y: 0, rotate: 4, scale: 1 },
-    { x: 3, y: -2, rotate: 2, scale: 1 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
-    { x: 3, y: -2, rotate: 2, scale: 1 },
+    { x: 10, y: 0, rotate: 2 },
+    { x: 7, y: -1, rotate: 1 },
+    { x: 4, y: 0, rotate: 0 },
+    { x: 7, y: -1, rotate: 1 },
   ],
   jump: [
-    { x: 0, y: -10, rotate: -5, scale: 1.1 },
-    { x: 0, y: -16, rotate: 0, scale: 1.15 },
-    { x: 0, y: -8, rotate: 5, scale: 1.05 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
-    { x: 0, y: -3, rotate: 0, scale: 1.02 }, // small bounce on landing
-    { x: 0, y: 0, rotate: 0, scale: 1 },
+    { x: 0, y: -10, rotate: -2 },
+    { x: 0, y: -14, rotate: 0 },
+    { x: 0, y: -6, rotate: 2 },
+    { x: 0, y: 0, rotate: 0 },
+    { x: 0, y: -2, rotate: 0 },
+    { x: 0, y: 0, rotate: 0 },
   ],
   spin: [
-    { x: 0, y: 0, rotate: 45, scale: 1 },
-    { x: 0, y: -2, rotate: 135, scale: 0.95 },
-    { x: 0, y: 0, rotate: 225, scale: 1 },
-    { x: 0, y: -2, rotate: 315, scale: 0.95 },
-    { x: 0, y: 0, rotate: 360, scale: 1 },
+    { x: 0, y: 0, rotate: 0 },
+    { x: 0, y: -3, rotate: 60 },
+    { x: 0, y: -1, rotate: 120 },
+    { x: 0, y: -3, rotate: 180 },
+    { x: 0, y: -1, rotate: 240 },
+    { x: 0, y: -3, rotate: 300 },
+    { x: 0, y: 0, rotate: 360 },
   ],
   shake: [
-    { x: -5, y: 0, rotate: -6, scale: 1 },
-    { x: 5, y: 0, rotate: 6, scale: 1 },
-    { x: -4, y: 0, rotate: -4, scale: 1 },
-    { x: 4, y: 0, rotate: 4, scale: 1 },
-    { x: -2, y: 0, rotate: -2, scale: 1 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
+    { x: -4, y: 0, rotate: -3 },
+    { x: 4, y: 0, rotate: 3 },
+    { x: -3, y: 0, rotate: -2 },
+    { x: 3, y: 0, rotate: 2 },
+    { x: 0, y: 0, rotate: 0 },
   ],
   bounce: [
-    { x: 0, y: -6, rotate: 0, scale: 1.08 },
-    { x: 0, y: 0, rotate: 0, scale: 0.95 },
-    { x: 0, y: -4, rotate: 0, scale: 1.05 },
-    { x: 0, y: 0, rotate: 0, scale: 0.98 },
-    { x: 0, y: -2, rotate: 0, scale: 1.02 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
+    // Calm walk during streaming — no scale oscillation
+    { x: 5, y: 0, rotate: 1 },
+    { x: 5, y: -2, rotate: 0 },
+    { x: 5, y: 0, rotate: 1 },
+    { x: 0, y: -1, rotate: 0 },
   ],
   peek: [
-    { x: 4, y: 0, rotate: 8, scale: 1 },
-    { x: 6, y: -1, rotate: 10, scale: 1 },
-    { x: 4, y: 0, rotate: 8, scale: 1 },
-    { x: 2, y: 0, rotate: 4, scale: 1 },
-    { x: 0, y: 0, rotate: 0, scale: 1 },
+    { x: 5, y: 0, rotate: 4 },
+    { x: 7, y: -1, rotate: 5 },
+    { x: 5, y: 0, rotate: 4 },
+    { x: 2, y: 0, rotate: 1 },
+    { x: 0, y: 0, rotate: 0 },
   ],
 }
 
-// Transition duration per move — snappy for jump/shake, smooth for walk/bounce
+// Transition duration per move — linear feel for walking, snappy for effects
 const MOVE_TRANSITION_MS: Record<GuruMove, number> = {
   idle: 1200,
-  'walk-left': 350,
-  'walk-right': 350,
+  'walk-left': 500,
+  'walk-right': 500,
   jump: 180,
-  spin: 250,
-  shake: 100,
-  bounce: 200,
+  spin: 300,
+  shake: 120,
+  bounce: 500,
   peek: 400,
 }
 
@@ -171,8 +176,14 @@ export function GuruSprite({ guru, move = 'idle', excited = false, className }: 
   const step = steps[tick % steps.length]!
   const transitionMs = MOVE_TRANSITION_MS[move]
 
+  // Use spring easing only for jump/spin/shake — linear for walking/idle
+  const isDynamic = move === 'jump' || move === 'spin' || move === 'shake'
+  const easing = isDynamic
+    ? 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+    : 'ease-out'
+
   const transform =
-    `translateX(${step.x}px) translateY(${step.y}px) rotate(${step.rotate}deg) scale(${step.scale})`
+    `translateX(${step.x}px) translateY(${step.y}px) rotate(${step.rotate}deg)`
 
   return (
     <div
@@ -182,7 +193,7 @@ export function GuruSprite({ guru, move = 'idle', excited = false, className }: 
       style={{
         cursor: 'pointer',
         transform,
-        transition: `transform ${transitionMs}ms cubic-bezier(0.34, 1.56, 0.64, 1)`,
+        transition: `transform ${transitionMs}ms ${easing}`,
         willChange: 'transform',
       }}
     >

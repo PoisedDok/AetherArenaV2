@@ -76,18 +76,29 @@ export async function fireGuruObserver(
 
     const data = (await res.json()) as { reaction?: string; move?: string }
 
-    if (data.reaction && typeof data.reaction === 'string' && data.reaction.trim()) {
-      onReaction(data.reaction.trim())
-    }
+    const reactionText =
+      (data.reaction && typeof data.reaction === 'string' && data.reaction.trim())
+        ? data.reaction.trim()
+        : null
 
-    // Dispatch move event — sprite picks it up independently
-    if (data.move && typeof data.move === 'string' && VALID_MOVES.has(data.move)) {
-      window.dispatchEvent(
-        new CustomEvent<GuruMove>('guru:move', { detail: data.move as GuruMove }),
-      )
+    // Only fire reaction + move when there is actual text
+    if (reactionText) {
+      onReaction(reactionText)
+
+      // Dispatch move event — sprite picks it up independently
+      // Only when we also have a visible reaction so the animation has context
+      if (data.move && typeof data.move === 'string' && VALID_MOVES.has(data.move)) {
+        window.dispatchEvent(
+          new CustomEvent<GuruMove>('guru:move', { detail: data.move as GuruMove }),
+        )
+      }
     }
-  } catch {
-    // Silently swallow — Guru is decorative, never block UX
+  } catch (err) {
+    // Log failure for debugging — Guru is decorative but failures should not be invisible
+    console.error(
+      '[Guru] LLM reaction failed:',
+      err instanceof Error ? err.message : String(err),
+    )
   } finally {
     // Always clear thinking ring
     window.dispatchEvent(new CustomEvent('guru:thinking', { detail: false }))

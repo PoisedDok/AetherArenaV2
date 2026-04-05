@@ -2,9 +2,12 @@
 
 import { Loader2Icon, LockIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { authClient } from "@/server/better-auth/client";
+
+const REMEMBERED_USERNAME_KEY = "aether_arena_remembered_username";
 
 function LoginForm() {
   const router = useRouter();
@@ -13,8 +16,17 @@ function LoginForm() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(REMEMBERED_USERNAME_KEY);
+    if (saved) {
+      setUsername(saved);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +35,17 @@ function LoginForm() {
 
     // better-auth requires valid email (Zod z.email() needs a TLD); username@local.app is the internal convention
     const email = username.includes("@") ? username : `${username}@local.app`;
+
+    if (rememberMe) {
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+    } else {
+      localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+    }
+
     const { error: authError } = await authClient.signIn.email({
       email,
       password,
+      rememberMe,
     });
 
     if (authError) {
@@ -99,6 +119,20 @@ function LoginForm() {
               {error}
             </p>
           )}
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="remember"
+              checked={rememberMe}
+              onCheckedChange={(v) => setRememberMe(!!v)}
+            />
+            <label
+              htmlFor="remember"
+              className="cursor-pointer text-xs text-muted-foreground"
+            >
+              Remember me
+            </label>
+          </div>
 
           <button
             type="submit"

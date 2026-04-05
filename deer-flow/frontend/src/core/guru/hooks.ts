@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { getLocalSettings } from '@/core/settings/local'
+
 import { getGuru, getGuruMuted, setGuruMuted } from './guru'
 import type { GuruMove } from './observer'
 import type { Guru } from './types'
@@ -144,7 +146,7 @@ export function useGuruMove(): GuruMove {
         setStateMove(paceToggleRef.current ? 'walk-right' : 'walk-left')
       }, PACE_MS)
     } else if (state === 'streaming') {
-      setStateMove('bounce')
+      setStateMove('walk-right')
     } else {
       setStateMove('idle')
     }
@@ -254,9 +256,19 @@ function pickRandom<T>(arr: T[]): T {
  * Fires contextual hardcoded lines at the right moments — no LLM needed.
  * Meant to be called once in GuruWidget. Requires guru to be hatched.
  */
+/**
+ * Fires contextual hardcoded lines at the right moments — no LLM needed.
+ * Meant to be called once in GuruWidget. Requires guru to be hatched.
+ *
+ * Greeting: fires once per thread (tracked by localStorage key), not per mount.
+ * Idle: only fires after 45s of zero movement/reaction activity.
+ * Pet: fires when user clicks the sprite.
+ */
 export function useGuruIdleComments(muted: boolean): void {
-  const hasFiredOpenRef = useRef(false)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Build a per-thread greeting key — changes when thread_id changes, not on remount
+  const greetingKeyRef = useRef<string>('')
 
   // Reset idle timer on any activity event
   const resetIdle = useCallback(() => {
@@ -270,22 +282,30 @@ export function useGuruIdleComments(muted: boolean): void {
     }, IDLE_COMMENT_AFTER_MS)
   }, [muted])
 
-  // Session-open greeting — fires once per mount, after a short settle delay
+  // Session-open greeting — fires once per thread (localStorage-gated)
   useEffect(() => {
-    if (muted || hasFiredOpenRef.current) return
+    if (muted) return
+
+    // Extract thread_id from current URL to build unique greeting key
+    const parts = window.location.pathname.split('/')
+    const threadId = parts[parts.length - 1] ?? 'unknown'
+    const key = `aether.guru.greeted.${threadId}`
+    greetingKeyRef.current = key
+
+    // Already greeted for this thread — skip
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(key)) return
+
     const t = setTimeout(() => {
-      if (!hasFiredOpenRef.current) {
-        hasFiredOpenRef.current = true
-        window.dispatchEvent(
-          new CustomEvent('guru:reaction', { detail: pickRandom(SESSION_OPEN_LINES) }),
-        )
-      }
-      // Start idle timer after greeting
+      // Double-check — another instance may have set it during the delay
+      if (typeof localStorage !== 'undefined' && localStorage.getItem(key)) return
+      window.dispatchEvent(
+        new CustomEvent('guru:reaction', { detail: pickRandom(SESSION_OPEN_LINES) }),
+      )
+      localStorage.setItem(key, '1')
       resetIdle()
     }, SESSION_OPEN_DELAY_MS)
     return () => clearTimeout(t)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally only on mount
+  }, [muted, resetIdle])
 
   // Reset idle timer whenever a real reaction arrives (LLM or state-driven)
   useEffect(() => {
@@ -298,14 +318,19 @@ export function useGuruIdleComments(muted: boolean): void {
     }
   }, [resetIdle])
 
-  // Pet reaction
+  // Pet reaction — gated by cooldown to prevent spam-clicking
+  const PET_COOLDOWN_MS = 8_000
+  const lastPetRef = useRef(0)
+
   useEffect(() => {
     const handler = () => {
-      if (!muted) {
-        window.dispatchEvent(
-          new CustomEvent('guru:reaction', { detail: pickRandom(PET_LINES) }),
-        )
-      }
+      if (muted) return
+      const now = Date.now()
+      if (now - lastPetRef.current < PET_COOLDOWN_MS) return
+      lastPetRef.current = now
+      window.dispatchEvent(
+        new CustomEvent('guru:reaction', { detail: pickRandom(PET_LINES) }),
+      )
     }
     window.addEventListener('guru:pet', handler)
     return () => window.removeEventListener('guru:pet', handler)
@@ -337,4 +362,23 @@ export function useGuruMuted(): [boolean, (muted: boolean) => void] {
   }, [])
 
   return [muted, setMuted]
+}
+
+/**
+ * Returns true when the Guru widget is enabled via settings.
+ * Reacts to settings changes so the widget appears/disappears in real time.
+ */
+export function useGuruEnabled(): boolean {
+  const [enabled, setEnabled] = useState(() => getLocalSettings().guru.enabled)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const settings = (e as CustomEvent<{ guru: { enabled: boolean } }>).detail
+      setEnabled(settings?.guru?.enabled ?? true)
+    }
+    window.addEventListener('deerflow:settings-change', handler)
+    return () => window.removeEventListener('deerflow:settings-change', handler)
+  }, [])
+
+  return enabled
 }

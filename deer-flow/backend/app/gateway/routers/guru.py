@@ -47,6 +47,7 @@ def _parse_move(text: str) -> tuple[str, str]:
     Extract MOVE:<name> tag from LLM output.
     Returns (reaction_text_without_tag, move_name).
     Falls back to 'idle' if no valid move found.
+    If the tag is the ONLY content, returns a fallback reaction.
     """
     m = re.search(r'\bMOVE:([\w-]+)\b', text, re.IGNORECASE)
     if m:
@@ -55,6 +56,9 @@ def _parse_move(text: str) -> tuple[str, str]:
             move = "idle"
         # Strip the tag from visible text
         clean = re.sub(r'\s*MOVE:[\w-]+\b', '', text, flags=re.IGNORECASE).strip()
+        # If stripping left the text empty, synthesize a minimal reaction
+        if not clean:
+            clean = "Watching."
         return clean, move
     return text, "idle"
 
@@ -132,6 +136,12 @@ async def guru_react(request: GuruReactRequest) -> GuruReactResponse:
         m_term = re.search(r'[.!?]', reaction_text)
         terminator = m_term.group(0) if m_term else '.'
         reaction_out = (first + terminator) if first else reaction_text[:40]
+
+        # Final safety net: ensure non-empty reaction
+        if not reaction_out or not reaction_out.strip():
+            # Use first 3 words of raw text as absolute fallback
+            words = raw_text.split()
+            reaction_out = ' '.join(words[:3]) + '.'
 
         return GuruReactResponse(reaction=reaction_out, move=move)
     except Exception as e:
