@@ -6,6 +6,8 @@ export interface Subtask {
   subagent_type: string;
   description: string;
   latestMessage?: AIMessage;
+  /** Accumulated history of all subtask messages for expandable step viewing */
+  messageHistory?: AIMessage[];
   prompt: string;
   result?: string;
   error?: string;

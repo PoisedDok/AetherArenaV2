@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { deleteMemoryFact, loadMemory, updateMemoryFact, updateMemorySection } from "./api";
+import {
+  deleteMemoryFact,
+  loadMemory,
+  loadMemoryConfig,
+  updateMemoryFact,
+  updateMemoryModelName,
+  updateMemorySection,
+} from "./api";
 
 export function useMemory() {
   const { data, isLoading, error } = useQuery({
@@ -38,6 +45,24 @@ export function useUpdateMemorySection() {
       updateMemorySection(section, summary),
     onSuccess: (updated) => {
       qc.setQueryData(["memory"], updated);
+    },
+  });
+}
+
+export function useMemoryConfig() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["memory-config"],
+    queryFn: () => loadMemoryConfig(),
+  });
+  return { config: data ?? null, isLoading, error };
+}
+
+export function useUpdateMemoryModelName() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (modelName: string | null) => updateMemoryModelName(modelName),
+    onSuccess: (updated) => {
+      qc.setQueryData(["memory-config"], updated);
     },
   });
 }

@@ -43,13 +43,15 @@ export default function AgentChatPage() {
     threadId: isNewThread ? undefined : threadId,
     context: { ...settings.context, agent_name: agent_name },
     onStart: () => {
-      setIsNewThread(false);
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       history.replaceState(
         null,
         "",
         `/workspace/agents/${agent_name}/chats/${threadId}`,
       );
+    },
+    onThreadCreated: () => {
+      setIsNewThread(false);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {

@@ -138,6 +138,7 @@ export function MessageList({
             for (const message of group.messages.filter(
               (message) => message.type === "ai",
             )) {
+              // Render reasoning if present
               if (hasReasoning(message)) {
                 results.push(
                   <MessageGroup
@@ -147,9 +148,24 @@ export function MessageList({
                   />,
                 );
               }
+              // Render text content between subtask calls (was lost before)
+              if (hasContent(message)) {
+                const content = extractContentFromMessage(message);
+                if (content) {
+                  results.push(
+                    <MarkdownContent
+                      key={"subtask-text-" + message.id}
+                      content={content}
+                      isLoading={thread.isLoading}
+                      rehypePlugins={rehypePlugins}
+                      className="my-2"
+                    />,
+                  );
+                }
+              }
               results.push(
                 <div
-                  key="subtask-count"
+                  key={"subtask-count-" + message.id}
                   className="text-muted-foreground font-norma pt-2 text-sm"
                 >
                   {t.subtasks.executing(tasks.size)}

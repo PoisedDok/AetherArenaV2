@@ -88,20 +88,39 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
   },
 ];
 
-/** Match a Model's provider_use + endpoint_url to a ProviderDefinition id */
+/**
+ * Derive a provider id from any combination of available metadata.
+ *
+ * Priority:
+ *   1. endpoint_url patterns (most authoritative)
+ *   2. provider_use patterns from config
+ *   3. model-name patterns (for live models not in config, e.g. OpenRouter catalog)
+ *   4. fallback "lmstudio" for local-ish providers
+ */
 export function matchProviderForModel(
   providerUse: string,
   endpointUrl?: string | null,
+  modelName?: string | null,
 ): string {
   const use = providerUse.toLowerCase();
   const endpoint = (endpointUrl ?? "").toLowerCase();
+  const name = (modelName ?? "").toLowerCase();
 
   for (const def of PROVIDER_DEFINITIONS) {
-    // Endpoint patterns take precedence (differentiates OpenRouter from OpenAI)
     if (def.endpointPatterns?.some((p) => endpoint.includes(p))) return def.id;
   }
   for (const def of PROVIDER_DEFINITIONS) {
     if (def.providerUsePatterns.some((p) => use.includes(p))) return def.id;
   }
-  return "lmstudio"; // fallback for unknown local-ish providers
+
+  // Model-name inference for live / external models
+  if (name.includes(":free")) return "openrouter";
+  if (name.includes("openrouter")) return "openrouter";
+  if (name.startsWith("openai/")) return "openai";
+  if (name.startsWith("anthropic/")) return "anthropic";
+  if (name.startsWith("google/")) return "google";
+  if (name.startsWith("groq/")) return "groq";
+  if (name.startsWith("deepseek/")) return "deepseek";
+
+  return "lmstudio";
 }

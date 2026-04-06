@@ -42,10 +42,20 @@ export function useUpdateSubtask() {
   const { tasks, setTasks } = useSubtaskContext();
   const updateSubtask = useCallback(
     (task: Partial<Subtask> & { id: string }) => {
-      tasks[task.id] = { ...tasks[task.id], ...task } as Subtask;
+      const existing = tasks[task.id];
+      // Accumulate messageHistory: append latestMessage only when genuinely new
+      let newHistory = existing?.messageHistory ?? [];
       if (task.latestMessage) {
-        setTasks({ ...tasks });
+        const lastHistoryId = newHistory.length > 0
+          ? newHistory[newHistory.length - 1]?.id
+          : undefined;
+        // Only append if this message isn't already the last entry (avoid SSE duplicates)
+        if (task.latestMessage.id !== lastHistoryId) {
+          newHistory = [...newHistory, task.latestMessage];
+        }
       }
+      tasks[task.id] = { ...existing, ...task, messageHistory: newHistory } as Subtask;
+      setTasks({ ...tasks });
     },
     [tasks, setTasks],
   );

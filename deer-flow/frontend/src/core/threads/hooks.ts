@@ -13,6 +13,8 @@ import { fireGuruObserver } from "../guru/observer";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
 import type { Model } from "../models/types";
+import { matchProviderForModel } from "../providers/definitions";
+import { enqueue, processQueueIfReady } from "../queue";
 import type { LocalSettings } from "../settings";
 import { getLocalSettings } from "../settings/local";
 import { useUpdateSubtask } from "../tasks/context";
@@ -31,9 +33,97 @@ export type ThreadStreamOptions = {
   context: LocalSettings["context"];
   isMock?: boolean;
   onStart?: (threadId: string) => void;
+  onThreadCreated?: (threadId: string) => void;
   onFinish?: (state: AgentThreadState) => void;
   onToolEnd?: (event: ToolEndEvent) => void;
 };
+
+// ── Provider API key resolution for runtime submission ────────────────────────
+
+const API_KEY_STORAGE_PREFIX = "deerflow.provider-key.";
+
+/**
+ * Resolve the provider API key for a given model name.
+ *
+ * Reads the saved key from localStorage using the same prefix as the
+ * settings UI (models-settings-page.tsx). The provider id is inferred
+ * from the model name's prefix or by resolving through known models.
+ *
+ * @param modelName - E.g. "openrouter", "qwen/qwen3.6-plus:free", "gpt-4o"
+ * @param cachedModels - The same models list from the query cache (used for pattern matching)
+ * @returns The saved API key, or undefined if none is set.
+ */
+export function getProviderApiKeyForModel(
+  modelName: string | undefined,
+  cachedModels: Model[],
+): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  if (!modelName) return undefined;
+
+  let providerId: string | null = null;
+
+  if (modelName.includes("/")) {
+    // Check if model name matches a known OpenRouter pattern (author/model:tag)
+    // OpenRouter models use format like "qwen/qwen3.6-plus:free" where the first
+    // segment is a model author, not a provider. Config provider models use
+    // the provider ID as the first segment (e.g. "lmstudio/qwen3-4b").
+    const orModel = cachedModels.find(
+      (m) => m.name === modelName && m.provider_use.toLowerCase().includes("openrouter"),
+    );
+    if (orModel) {
+      providerId = "openrouter";
+    }
+
+    // If no match in cache, fall back to pattern-based detection
+    if (!providerId) {
+      // OpenRouter free models carry ":free" — treat as openrouter by default
+      if (modelName.includes(":free")) {
+        providerId = "openrouter";
+      }
+    }
+
+    // Check if this is a known provider-prefixed name (e.g., "lmstudio/qwen3-4b")
+    if (!providerId) {
+      const parts = modelName.split("/");
+      const firstSegment = parts[0] ? parts[0].toLowerCase() : "";
+      for (const m of cachedModels) {
+        if (m.name === modelName) {
+          providerId = matchProviderForModel(m.provider_use, m.endpoint_url);
+          break;
+        }
+        // If first segment matches a model's first segment, use that model's provider
+        if (firstSegment && m.name.startsWith(firstSegment + "/")) {
+          providerId = matchProviderForModel(m.provider_use, m.endpoint_url);
+          break;
+        }
+      }
+    }
+
+    // Fall back: if first segment matches a provider pattern directly
+    if (!providerId) {
+      const parts = modelName.split("/");
+      const firstSegment = parts[0] ?? "";
+      for (const seg of cachedModels.map((m) => m.provider_use)) {
+        if (seg.toLowerCase().includes(firstSegment.toLowerCase())) {
+          providerId = matchProviderForModel(seg, null);
+          break;
+        }
+      }
+    }
+  } else {
+    // Simple name without "/": check if it's a known model config name
+    const exactModel = cachedModels.find((m) => m.name === modelName);
+    if (exactModel) {
+      providerId = matchProviderForModel(exactModel.provider_use, exactModel.endpoint_url);
+    } else if (modelName.toLowerCase().includes("openrouter")) {
+      providerId = "openrouter";
+    }
+  }
+
+  if (!providerId) return undefined;
+
+  return localStorage.getItem(API_KEY_STORAGE_PREFIX + providerId) ?? undefined;
+}
 
 function getStreamErrorMessage(error: unknown): string {
   if (typeof error === "string" && error.trim()) {
@@ -63,12 +153,17 @@ export function useThreadStream({
   context,
   isMock,
   onStart,
+  onThreadCreated,
   onFinish,
   onToolEnd,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
   // Track the thread ID that is currently streaming to handle thread changes during streaming
   const [onStreamThreadId, setOnStreamThreadId] = useState(() => threadId);
+  // Bumping this key forces the useStream hook to unmount and remount with a brand-new
+  // stream instance — LangGraph creates a fresh connection that resumes from the server's
+  // last checkpoint, so partial work (tool calls, generated text) is not lost.
+  const [streamRestartKey, setStreamRestartKey] = useState(0);
   // Ref to track current thread ID across async callbacks without causing re-renders,
   // and to allow access to the current thread id in onUpdateEvent
   const threadIdRef = useRef<string | null>(threadId ?? null);
@@ -76,24 +171,35 @@ export function useThreadStream({
 
   const listeners = useRef({
     onStart,
+    onThreadCreated,
     onFinish,
     onToolEnd,
   });
 
+  // Track the server-created thread ID to prevent the threadId prop sync from
+  // overwriting it with the client UUID after isNewThread flips.
+  const serverThreadIdRef = useRef<string | null>(null);
+
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
-    listeners.current = { onStart, onFinish, onToolEnd };
-  }, [onStart, onFinish, onToolEnd]);
+    listeners.current = { onStart, onThreadCreated, onFinish, onToolEnd };
+  }, [onStart, onThreadCreated, onFinish, onToolEnd]);
 
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
-    if (!normalizedThreadId) {
-      // Just reset for new thread creation when threadId becomes null/undefined
-      startedRef.current = false;
-      setOnStreamThreadId(normalizedThreadId);
-    }
+    // When this is a restart (streamRestartKey changed), temporarily reset the thread
+    // id to null to force the SDK to teardown the old stream, then set it back
+    // on the next tick so it remounts with a fresh Stream instance.
     threadIdRef.current = normalizedThreadId;
-  }, [threadId]);
+    startedRef.current = false;
+
+    // Don't overwrite the server-created thread ID with the client UUID when
+    // isNewThread flips after onThreadCreated fires.
+    if (serverThreadIdRef.current && serverThreadIdRef.current !== normalizedThreadId) {
+      return;
+    }
+    setOnStreamThreadId(normalizedThreadId);
+  }, [threadId, streamRestartKey]);
 
   const _handleOnStart = useCallback((id: string) => {
     if (!startedRef.current) {
@@ -120,8 +226,10 @@ export function useThreadStream({
     reconnectOnMount: true,
     fetchStateHistory: { limit: 1 },
     onCreated(meta) {
+      serverThreadIdRef.current = meta.thread_id;
       handleStreamStart(meta.thread_id);
       setOnStreamThreadId(meta.thread_id);
+      onThreadCreated?.(meta.thread_id);
     },
     onLangChainEvent(event) {
       if (event.event === "on_tool_end") {
@@ -177,7 +285,41 @@ export function useThreadStream({
     },
     onError(error) {
       setOptimisticMessages([]);
+
+      // Always reset the send gate so the user (or queue handler) can retry
+      sendInFlightRef.current = false;
+
+      // Freeze current messages (preserves partial streamed content that the user
+      // already saw) — same pattern as stopStream, so nothing disappears on crash.
+      const currentlyVisible =
+        optimisticMessages.length > 0
+          ? [...thread.messages, ...optimisticMessages]
+          : thread.messages.length > 0
+            ? [...thread.messages]
+            : null;
+      if (currentlyVisible && currentlyVisible.length > 0) {
+        setFrozenMessages(currentlyVisible);
+      }
+
+      // Bump the restart key — forces the useEffect to re-run with a fresh thread
+      // id assignment, clearing the SDK's dead Stream internal state.
+      setStreamRestartKey((k) => k + 1);
+
       toast.error(getStreamErrorMessage(error));
+
+      // Auto-resubmit queued messages for this thread after a stream error,
+      // so users don't lose follow-ups when the run crashes (e.g. rate limit).
+      void (async () => {
+        const activeThread = threadIdRef.current ?? threadId;
+        if (!activeThread) return;
+        const result = processQueueIfReady(activeThread);
+        if (result.processed && result.messages.length > 0) {
+          for (const msg of result.messages) {
+            if (!threadIdRef.current) break;
+            await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
+          }
+        }
+      })();
     },
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
@@ -205,8 +347,9 @@ export function useThreadStream({
                     .join("")
                 : "";
           if (lastAiText.trim()) {
-            // Default to "lfm" (small, fast 1.2B model) if no Guru model configured
-            const guruModelName = getLocalSettings().guru.model_name ?? "lfm";
+            // null means backend resolves to the default/first available model —
+            // respects whatever model the user has active in config.yaml.
+            const guruModelName = getLocalSettings().guru.model_name ?? undefined;
             void fireGuruObserver(
               lastAiText,
               guru,
@@ -219,6 +362,20 @@ export function useThreadStream({
           }
         }
       }
+
+      // Auto-resubmit queued messages for this thread after stream completes
+      void (async () => {
+        const activeThread = threadIdRef.current ?? threadId;
+        if (!activeThread) return;
+        const result = processQueueIfReady(activeThread);
+        if (result.processed && result.messages.length > 0) {
+          sendInFlightRef.current = false;
+          for (const msg of result.messages) {
+            if (!threadIdRef.current) break;
+            await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
+          }
+        }
+      })();
     },
   });
 
@@ -253,12 +410,21 @@ export function useThreadStream({
       message: PromptInputMessage,
       extraContext?: Record<string, unknown>,
     ) => {
+      const trimmedText = message.text.trim();
       if (sendInFlightRef.current) {
+        if (trimmedText) {
+          enqueue({
+            threadId: threadId,
+            text: trimmedText,
+            priority: "next",
+            hasAttachments: (message.files?.length ?? 0) > 0,
+          });
+        }
         return;
       }
       sendInFlightRef.current = true;
 
-      const text = message.text.trim();
+      const text = trimmedText;
 
       // Capture current count before showing optimistic messages.
       // Use frozenMessages length if available (after a stop, thread.messages
@@ -478,6 +644,15 @@ export function useThreadStream({
             ctxWithExtras.max_concurrent_subagents;
         }
 
+        // Resolve and attach the provider API key for the selected model
+        const providerApiKey = getProviderApiKeyForModel(
+          effectiveModelName,
+          cachedModels,
+        );
+        if (providerApiKey) {
+          runContext.provider_api_key = providerApiKey;
+        }
+
         await thread.submit(
           {
             messages: [
@@ -591,7 +766,49 @@ export function useThreadStream({
     stop: stopStream,
   };
 
-  return [mergedThreadWithStop, sendMessage, isUploading] as const;
+  /**
+   * Retry the last human message after an error.
+   *
+   * Captures the text of the last human message currently visible (frozen or real),
+   * resets the send gate, and re-submits it. The useStream hook has already been
+   * remounted by the onError handler (bumped streamRestartKey), so the new submit
+   * hits a fresh LangGraph connection that resumes from checkpoint state.
+   */
+  const retryStream = useCallback(
+    async (customMessage?: string) => {
+      if (sendInFlightRef.current) return;
+
+      // If caller provides a message, use it. Otherwise grab the last human message.
+      if (customMessage) {
+        const activeThread = threadIdRef.current;
+        if (!activeThread) return;
+        await sendMessage(activeThread, { text: customMessage, files: [] });
+        return;
+      }
+
+      const baseMessages = frozenMessages ?? thread.messages;
+      const lastHuman = [...baseMessages].reverse().find((m) => m.type === "human");
+      if (!lastHuman) return;
+
+      const text =
+        typeof lastHuman.content === "string"
+          ? lastHuman.content
+          : Array.isArray(lastHuman.content)
+            ? lastHuman.content
+                .map((c) => (c.type === "text" ? c.text : ""))
+                .join("")
+            : "";
+
+      if (!text.trim()) return;
+
+      const activeThread = threadIdRef.current;
+      if (!activeThread) return;
+      await sendMessage(activeThread, { text, files: [] });
+    },
+    [sendMessage, frozenMessages, thread.messages],
+  );
+
+  return [mergedThreadWithStop, sendMessage, isUploading, retryStream] as const;
 }
 
 export function useThreads(

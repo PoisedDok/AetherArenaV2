@@ -1,19 +1,22 @@
 "use client";
 
-import { CheckIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/core/i18n/hooks";
-import {
-  useDeleteMemoryFact,
-  useMemory,
-  useUpdateMemoryFact,
-  useUpdateMemorySection,
-} from "@/core/memory/hooks";
+import { useDeleteMemoryFact, useMemory, useMemoryConfig, useUpdateMemoryFact, useUpdateMemoryModelName, useUpdateMemorySection } from "@/core/memory/hooks";
 import type { UserMemory } from "@/core/memory/types";
+import { useModels } from "@/core/models/hooks";
 import { pathOfThread } from "@/core/threads/utils";
 import { formatTimeAgo } from "@/core/utils/datetime";
 import { cn } from "@/lib/utils";
@@ -245,8 +248,16 @@ function SectionGroup({ title, sections }: SectionGroupProps) {
 export function MemorySettingsPage() {
   const { t } = useI18n();
   const { memory, isLoading, error } = useMemory();
+  const { config: memoryConfig, isLoading: configLoading } = useMemoryConfig();
+  const { models } = useModels();
+  const { mutate: updateModelName, isPending: savingModel } = useUpdateMemoryModelName();
 
-  if (isLoading) {
+  const selectedModel = models.find((m) => m.name === memoryConfig?.model_name);
+  const displayLabel = selectedModel
+    ? (selectedModel.display_name ?? selectedModel.name)
+    : "Auto (default)";
+
+  if (isLoading || configLoading) {
     return (
       <SettingsSection title={t.settings.memory.title} description={t.settings.memory.description}>
         <div className="text-muted-foreground text-sm">{t.common.loading}</div>
@@ -285,6 +296,62 @@ export function MemorySettingsPage() {
   return (
     <SettingsSection title={t.settings.memory.title} description={t.settings.memory.description}>
       <div className="space-y-6">
+
+        {/* Model selector */}
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium">Model</div>
+          <p className="text-muted-foreground text-xs">
+            The model used to analyze conversations and extract memories.
+          </p>
+          <div className="flex max-w-md">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between font-mono text-xs"
+                  disabled={models.length === 0}
+                >
+                  <span className="truncate">{displayLabel}</span>
+                  <ChevronDownIcon className="size-3.5 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-64 overflow-y-auto">
+                <DropdownMenuItem
+                  onSelect={() => updateModelName(null, { onSuccess: () => toast.success(t.settings.memory.saveChanges) })}
+                  className={cn("text-xs font-mono gap-2", !memoryConfig?.model_name && "text-primary")}
+                >
+                  {!memoryConfig?.model_name && <CheckIcon className="size-3" />}
+                  <span className={memoryConfig?.model_name ? "pl-5" : ""}>Auto (default)</span>
+                </DropdownMenuItem>
+                {models.map((model) => {
+                  const active = memoryConfig?.model_name === model.name;
+                  return (
+                    <DropdownMenuItem
+                      key={model.name}
+                      onSelect={() => updateModelName(model.name, { onSuccess: () => toast.success(t.settings.memory.saveChanges) })}
+                      className={cn("text-xs font-mono gap-2", active && "text-primary")}
+                    >
+                      {active ? (
+                        <CheckIcon className="size-3 shrink-0" />
+                      ) : (
+                        <span className="w-3 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{model.display_name ?? model.name}</span>
+                        {model.description && (
+                          <span className="text-muted-foreground text-[10px] truncate">{model.description}</span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {savingModel && <p className="text-xs text-muted-foreground">Updating...</p>}
+        </div>
+
+        <Separator />
 
         {/* User context */}
         <SectionGroup title={t.settings.memory.markdown.userContext} sections={userSections} />

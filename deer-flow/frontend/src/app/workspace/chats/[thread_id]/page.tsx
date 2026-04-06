@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
@@ -36,14 +36,19 @@ export default function ChatPage() {
 
   const { showNotification } = useNotification();
 
-  const [thread, sendMessage, isUploading] = useThreadStream({
+  const [lastStreamError, setLastStreamError] = useState(false);
+
+  const [thread, sendMessage, isUploading, retryStream] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: settings.context,
     isMock,
     onStart: () => {
-      setIsNewThread(false);
+      setLastStreamError(false);
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       history.replaceState(null, "", `/workspace/chats/${threadId}`);
+    },
+    onThreadCreated: () => {
+      setIsNewThread(false);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
@@ -63,14 +68,26 @@ export default function ChatPage() {
     },
   });
 
+  // Sync local error state with the SDK's immutable error property.
+  // Once error is set we track it locally so we can clear it on a successful submit.
+  useEffect(() => {
+    if (thread.error) {
+      setLastStreamError(true);
+    }
+  }, [thread.error]);
+
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      // Inject guru intro context once per session if a guru is hatched
+      if (lastStreamError) {
+        void retryStream(message.text);
+        return;
+      }
+
       const guru = getGuru();
       const guruIntro = guru ? getGuruIntroContext(guru.name, guru.species) : null;
       void sendMessage(threadId, message, guruIntro ?? undefined);
     },
-    [sendMessage, threadId],
+    [lastStreamError, sendMessage, threadId, retryStream],
   );
   const handleStop = useCallback(async () => {
     await thread.stop();
@@ -139,10 +156,10 @@ export default function ChatPage() {
                     threadId={threadId}
                     autoFocus={isNewThread}
                     status={
-                      thread.error
-                        ? "error"
-                        : thread.isLoading
-                          ? "streaming"
+                      thread.isLoading
+                        ? "streaming"
+                        : lastStreamError
+                          ? "error"
                           : "ready"
                     }
                     context={settings.context}
@@ -153,6 +170,7 @@ export default function ChatPage() {
                     onContextChange={(context) => setSettings("context", context)}
                     onSubmit={handleSubmit}
                     onStop={handleStop}
+                    onRetry={() => retryStream()}
                   />
                 </div>
                 {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (

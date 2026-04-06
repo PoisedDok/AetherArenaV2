@@ -10,7 +10,6 @@ import {
   Loader2Icon,
   SearchIcon,
   ServerIcon,
-  SparklesIcon,
   XCircleIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -29,6 +28,7 @@ import {
   useOpenRouterModels,
   useProvidersHealth,
   useTestProviderKey,
+  useTestProviderChat,
 } from "@/core/providers/hooks";
 import { useLocalSettings } from "@/core/settings";
 import { env } from "@/env";
@@ -63,6 +63,7 @@ interface PendingSelection {
   modelName: string;
   kind: SelectionKind;
   providerName: string;
+  providerId?: string;
 }
 
 function ConfirmDialog({
@@ -130,7 +131,7 @@ function CapBadge({ icon, label, color }: { icon: React.ReactNode; label: string
 // ── Model row ────────────────────────────────────────────────────────────────
 
 function ModelRow({
-  id,
+  id: _id,
   displayName,
   modelId,
   isChatSelected,
@@ -287,22 +288,35 @@ function ApiKeySection({
   providerId,
   docUrl,
   onKeyValidated,
+  onModelValidated,
 }: {
   providerId: string;
   docUrl?: string;
   onKeyValidated: (key: string) => void;
+  onModelValidated: (model: string) => void;
 }) {
   const { t } = useI18n();
   const [key, setKey] = useState(() => loadSavedKey(providerId));
   const [showKey, setShowKey] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("");
   const { mutate: testKey, isPending: isTesting, data: testResult, reset: resetTest } = useTestProviderKey();
+  const { mutate: fetchModels, data: modelsResult } = useFetchProviderModels();
+  const chatTest = useTestProviderChat();
+  const { data: openRouterData } = useOpenRouterModels(providerId === "openrouter");
 
   // Auto-load key on provider change
   useEffect(() => {
     const saved = loadSavedKey(providerId);
     setKey(saved);
     resetTest();
+    setSelectedModel("");
     if (saved) onKeyValidated(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
+  // Reset chat test state on provider change
+  useEffect(() => {
+    chatTest.stop();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerId]);
 
@@ -316,10 +330,16 @@ function ApiKeySection({
           if (result.valid) {
             saveKey(providerId, key.trim());
             onKeyValidated(key.trim());
+            fetchModels({ provider: providerId, api_key: key.trim() });
           }
         },
       },
     );
+  };
+
+  const handleChatTest = () => {
+    if (!key.trim() || !selectedModel) return;
+    void chatTest.start({ provider: providerId, api_key: key.trim(), model: selectedModel });
   };
 
   const handleChange = (v: string) => {
@@ -330,8 +350,26 @@ function ApiKeySection({
   const isValid = testResult?.valid === true;
   const isInvalid = testResult?.valid === false;
 
+  const sortedModels = useMemo(() => {
+    const baseModels = modelsResult?.models ?? [];
+    const orModels = openRouterData?.models ?? [];
+    const merged = providerId === "openrouter" ? [...orModels, ...baseModels] : baseModels;
+    const unique = new Map<string, ProviderModel>();
+    for (const m of merged) {
+      if (!unique.has(m.id)) unique.set(m.id, m);
+    }
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [modelsResult?.models, openRouterData?.models, providerId]);
+
+  useEffect(() => {
+    if (chatTest.state === "done" && selectedModel) {
+      onModelValidated(selectedModel);
+    }
+  }, [chatTest.state, selectedModel, onModelValidated]);
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* ── API key input + Validate button ── */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <KeyIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
@@ -379,6 +417,61 @@ function ApiKeySection({
               ? t.settings.models.testKeyValid
               : `${t.settings.models.testKeyInvalid}${testResult.error ? `: ${testResult.error}` : ""}`}
           </span>
+        </div>
+      )}
+
+      {/* ── Model dropdown ── */}
+      {sortedModels.length > 0 && (
+        <div className="flex items-center gap-2">
+          <CpuIcon className="size-3.5 text-muted-foreground/40 shrink-0" />
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="flex-1 rounded-lg border border-border/50 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="" disabled>
+              Select a model…
+            </option>
+            {sortedModels.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.is_free ? " [FREE]" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* ── Test Chat button + streaming output ── */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!key.trim() || !selectedModel || chatTest.state === "streaming" || chatTest.state === "done"}
+          onClick={handleChatTest}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+            chatTest.state === "done"
+              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+              : chatTest.state === "error"
+                ? "border-red-500/50 bg-red-500/10 text-red-400"
+                : "border-border/50 bg-muted/30 text-muted-foreground hover:bg-muted disabled:opacity-40",
+          )}
+        >
+          {chatTest.state === "streaming" && <Loader2Icon className="size-3 animate-spin" />}
+          {chatTest.state === "streaming"
+            ? "Testing…"
+            : chatTest.state === "done"
+              ? "Passed"
+              : chatTest.state === "error"
+                ? `Failed — ${chatTest.error}`
+                : "Test Chat"}
+        </button>
+      </div>
+
+      {chatTest.state === "streaming" && (
+        <div className="rounded-lg border border-border/30 bg-muted/10 px-3 py-2 font-mono text-[11px] leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap">
+          {chatTest.reasoning && <span className="text-violet-400/60">{chatTest.reasoning}</span>}
+          <span>{chatTest.text}</span>
         </div>
       )}
 
@@ -622,7 +715,20 @@ export function ModelsSettingsPage() {
   const [localSettings, setLocalSettings] = useLocalSettings();
   const demo = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true";
   const [pending, setPending] = useState<PendingSelection | null>(null);
-  const [activeProviderId, setActiveProviderId] = useState<string>(PROVIDER_DEFINITIONS[0]?.id ?? "");
+  const [activeProviderId, setActiveProviderId] = useState<string>(() => {
+    const saved = localSettings.context.selected_provider_id;
+    if (saved) {
+      const def = PROVIDER_DEFINITIONS.find((p) => p.id === saved);
+      if (def) return saved;
+    }
+    const modelName: string | undefined = localSettings.context.model_name as
+      | string
+      | undefined;
+    if (modelName) {
+      return matchProviderForModel("", null, modelName);
+    }
+    return PROVIDER_DEFINITIONS[0]?.id ?? "";
+  });
   const [validatedKey, setValidatedKey] = useState<string>("");
 
   const selectedChatName: string | undefined =
@@ -637,7 +743,7 @@ export function ModelsSettingsPage() {
       ? localSettings.context.vision_model_name
       : undefined;
 
-  // Pre-select provider of currently active model
+  // Pre-select provider of currently active model (when model is in config)
   useEffect(() => {
     if (!selectedChatName || !models.length) return;
     const m = models.find((x) => x.name === selectedChatName);
@@ -645,6 +751,30 @@ export function ModelsSettingsPage() {
     const pid = matchProviderForModel(m.provider_use, m.endpoint_url);
     if (pid) setActiveProviderId(pid);
   }, [selectedChatName, models]);
+
+  // Auto-select provider when saved model is not in config
+  useEffect(() => {
+    if (!selectedChatName || !models.length) return;
+    const inConfig = models.some((m) => m.name === selectedChatName);
+    if (inConfig) return;
+
+    // Use saved provider preference first
+    const savedProvider = localSettings.context.selected_provider_id;
+    if (savedProvider && savedProvider !== activeProviderId) {
+      const def = PROVIDER_DEFINITIONS.find((p) => p.id === savedProvider);
+      if (def) {
+        setActiveProviderId(savedProvider);
+        return;
+      }
+    }
+
+    // Fall back to pattern matching
+    const pid = matchProviderForModel("", null, selectedChatName);
+    if (pid && pid !== activeProviderId) {
+      setActiveProviderId(pid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChatName, models, localSettings.context.selected_provider_id]);
 
   // When provider changes, load saved key
   useEffect(() => {
@@ -654,8 +784,8 @@ export function ModelsSettingsPage() {
 
   const requestSelectChat = useCallback((modelId: string, modelName: string, providerName: string) => {
     if (modelId === selectedChatName) return;
-    setPending({ modelId, modelName, kind: "chat", providerName });
-  }, [selectedChatName]);
+    setPending({ modelId, modelName, kind: "chat", providerName, providerId: activeProviderId });
+  }, [selectedChatName, activeProviderId]);
 
   const requestToggleVision = useCallback((modelId: string, modelName: string, providerName: string) => {
     if (modelId === selectedVisionName) {
@@ -668,12 +798,26 @@ export function ModelsSettingsPage() {
   const confirmSelection = useCallback(() => {
     if (!pending) return;
     if (pending.kind === "chat") {
-      setLocalSettings("context", { model_name: pending.modelId });
+      setLocalSettings("context", {
+        model_name: pending.modelId,
+        selected_provider_id: pending.providerId,
+      });
     } else {
       setLocalSettings("context", { vision_model_name: pending.modelId });
     }
     setPending(null);
   }, [pending, setLocalSettings]);
+
+  const handleOnKeyValidated = useCallback((key: string) => {
+    setValidatedKey(key);
+  }, []);
+
+  const handleOnModelValidated = useCallback(
+    (model: string) => {
+      setLocalSettings("context", { model_name: model, selected_provider_id: activeProviderId });
+    },
+    [setLocalSettings, activeProviderId],
+  );
 
   const modelsByProvider = useMemo(() => {
     const map = new Map<string, Model[]>();
@@ -765,22 +909,23 @@ export function ModelsSettingsPage() {
                 healthLoading={healthLoading}
                 onChange={(id) => {
                   setActiveProviderId(id);
+                  setLocalSettings("context", { selected_provider_id: id });
                 }}
               />
             </div>
 
-            {/* Step 2: API key (cloud only, not openrouter) */}
-            {activeDef?.kind === "cloud" && activeDef.id !== "openrouter" && (
+            {/* Step 2: API key (cloud providers) */}
+            {activeDef?.kind === "cloud" && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">API Key</p>
                 <ApiKeySection
                   providerId={activeProviderId}
                   docUrl={activeDef.docUrl}
-                  onKeyValidated={(key) => setValidatedKey(key)}
+                  onKeyValidated={handleOnKeyValidated}
+                  onModelValidated={handleOnModelValidated}
                 />
               </div>
             )}
-
             {/* Step 3: Model list */}
             {activeDef && (
               <div className="space-y-2 flex flex-col min-h-0">

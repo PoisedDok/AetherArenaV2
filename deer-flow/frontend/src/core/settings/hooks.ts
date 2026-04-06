@@ -59,10 +59,15 @@ export function useLocalSettings(): [
         return;
       }
       setState((prev) => {
+        const prevSection = prev[key] as Record<string, unknown>;
+        const hasChanges = Object.entries(value).some(
+          ([k, v]) => prevSection[k] !== v,
+        );
+        if (!hasChanges) return prev;
         const newState = {
           ...prev,
           [key]: {
-            ...prev[key],
+            ...prevSection,
             ...value,
           },
         };

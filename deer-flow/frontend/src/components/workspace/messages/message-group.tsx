@@ -348,12 +348,9 @@ function ToolCall({
       return t.toolCalls.executeCommand;
     }
     const command: string | undefined = (args as { command: string })?.command;
+    const hasResult = result !== undefined && result !== "";
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={description}
-        icon={SquareTerminalIcon}
-      >
+      <ChainOfThoughtStep key={id} label={description} icon={SquareTerminalIcon}>
         {command && (
           <CodeBlock
             className="mx-0 cursor-pointer border-none px-0"
@@ -361,6 +358,21 @@ function ToolCall({
             language="bash"
             code={command}
           />
+        )}
+        {hasResult && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-muted-foreground text-xs hover:text-foreground transition-colors">
+              Output
+            </summary>
+            <div className="mt-1 max-h-48 overflow-auto">
+              <CodeBlock
+                language="text"
+                code={typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+                showLineNumbers={false}
+                className="border-none px-0 text-xs"
+              />
+            </div>
+          </details>
         )}
       </ChainOfThoughtStep>
     );

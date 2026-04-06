@@ -8,6 +8,10 @@ export interface DeerflowDesktopBridge {
     node?: string;
     chrome?: string;
   };
+  safeStorage?: {
+    encrypt: (plaintext: string) => Promise<string>;
+    decrypt: (encryptedBase64: string) => Promise<string>;
+  };
 }
 
 declare global {

@@ -1,8 +1,10 @@
 import {
+  BookOpenTextIcon,
   CheckCircleIcon,
   ChevronUp,
   ClipboardListIcon,
   Loader2Icon,
+  WrenchIcon,
   XCircleIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,7 +19,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { ShineBorder } from "@/components/ui/shine-border";
 import { useI18n } from "@/core/i18n/hooks";
-import { hasToolCalls } from "@/core/messages/utils";
+import { extractContentFromMessage, hasToolCalls } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { streamdownPluginsWithWordAnimation } from "@/core/streamdown";
 import { useSubtask } from "@/core/tasks/context";
@@ -65,8 +67,10 @@ export function SubtaskCard({
       {task.status === "in_progress" && (
         <>
           <ShineBorder
-            borderWidth={1.5}
+            borderWidth={1}
+            duration={40}
             shineColor={["#A07CFE", "#FE8FB5", "#FFBE7B"]}
+            className="opacity-40"
           />
         </>
       )}
@@ -132,6 +136,64 @@ export function SubtaskCard({
                 >
                   {task.prompt}
                 </Streamdown>
+              }
+            ></ChainOfThoughtStep>
+          )}
+          {/* Expanded message history from subtask execution */}
+          {task.messageHistory && task.messageHistory.length > 0 && (
+            <ChainOfThoughtStep
+              label={
+                <span className="text-muted-foreground text-xs">
+                  {task.messageHistory.length} step{task.messageHistory.length > 1 ? "s" : ""} recorded
+                </span>
+              }
+              icon={<BookOpenTextIcon className="size-3" />}
+              description={
+                <div className="space-y-2 mt-1">
+                  {task.messageHistory.map((msg, idx) => {
+                    const hasTools = hasToolCalls(msg);
+                    const content = extractContentFromMessage(msg);
+                    const firstToolCall = msg.tool_calls?.[0];
+                    const labelNode =
+                      hasTools && firstToolCall
+                        ? explainLastToolCall(msg, t)
+                        : content
+                          ? content.slice(0, 120) + (content.length > 120 ? "…" : "")
+                          : "…";
+                    return (
+                      <div
+                        key={msg.id ?? String(idx)}
+                        className="rounded border border-border/30 bg-muted/20 px-2 py-1.5"
+                      >
+                        <div className="text-muted-foreground text-xs font-medium flex items-center gap-1.5">
+                          {hasTools ? (
+                            <WrenchIcon className="size-3 shrink-0" />
+                          ) : (
+                            <BookOpenTextIcon className="size-3 shrink-0" />
+                          )}
+                          {labelNode}
+                        </div>
+                        {content && (
+                          <div className="mt-1 pl-[18px]">
+                            <MarkdownContent
+                              content={content}
+                              isLoading={false}
+                              rehypePlugins={rehypePlugins}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                        {hasTools && firstToolCall && (
+                          <div className="mt-1 pl-[18px]">
+                            <span className="text-muted-foreground text-[10px] font-mono">
+                              {firstToolCall.name}({JSON.stringify(firstToolCall.args).slice(0, 200)})
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               }
             ></ChainOfThoughtStep>
           )}

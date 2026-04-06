@@ -77,7 +77,7 @@ function getTimeKey(hour: number): keyof typeof FALLBACK_LINES {
 // ---------------------------------------------------------------------------
 async function fetchGuruLine(guru: Guru): Promise<string | null> {
   const settings = getLocalSettings();
-  const modelName = settings.guru.model_name ?? "lfm";
+  const modelName = settings.guru.model_name ?? null;
 
   const toneMap: Record<string, string> = {
     WISDOM: "wise and minimal",

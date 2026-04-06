@@ -6,26 +6,105 @@ import { Suspense, useEffect, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { authClient } from "@/server/better-auth/client";
+import type { DeerflowDesktopBridge } from "@/types/deerflow-desktop";
 
-const REMEMBERED_USERNAME_KEY = "aether_arena_remembered_username";
+const CREDENTIAL_KEY = "aether_arena_credentials";
+
+interface StoredCredentials {
+  username: string;
+  rememberMe: boolean; // flag only — no password stored
+}
+
+/**
+ * Electron safeStorage helpers — fall back to plain localStorage when not in
+ * the desktop app (browser dev, CI, etc).
+ * Detected lazily so `window.deerflowDesktop` (set by preload) is available.
+ */
+function getBridge(): DeerflowDesktopBridge | undefined {
+  return typeof window !== "undefined"
+    ? window.deerflowDesktop
+    : undefined;
+}
+
+async function encryptValue(value: string): Promise<string> {
+  const bridge = getBridge();
+  if (bridge?.safeStorage) {
+    return bridge.safeStorage.encrypt(value);
+  }
+  // Fallback: btoa is not encryption but obscures the plaintext enough to
+  // signal intent. In a browser this never leaves the machine anyway.
+  return `plaintext:${btoa(unescape(encodeURIComponent(value)))}`;
+}
+
+async function decryptValue(encoded: string): Promise<string | null> {
+  if (!encoded) return null;
+  const bridge = getBridge();
+  if (bridge?.safeStorage) {
+    try {
+      return await bridge.safeStorage.decrypt(encoded);
+    } catch {
+      return null; // decryption may fail on keychain changes
+    }
+  }
+  // Fallback path
+  if (encoded.startsWith("plaintext:")) {
+    try {
+      return decodeURIComponent(escape(atob(encoded.slice(10))));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function loadCredentials(): Promise<StoredCredentials | null> {
+  const raw = localStorage.getItem(CREDENTIAL_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { encrypted?: string; rememberMe?: boolean };
+    if (!parsed.encrypted) return null;
+    const username = await decryptValue(parsed.encrypted);
+    if (!username) return null;
+    const rememberFlag = parsed.rememberMe ?? true;
+    return { username, rememberMe: Boolean(rememberFlag) };
+  } catch {
+    return null;
+  }
+}
+
+async function saveCredentials(
+  username: string,
+  rememberMe: boolean,
+): Promise<void> {
+  if (rememberMe) {
+    const encrypted = await encryptValue(username);
+    localStorage.setItem(
+      CREDENTIAL_KEY,
+      JSON.stringify({ encrypted, rememberMe: true }),
+    );
+  } else {
+    localStorage.removeItem(CREDENTIAL_KEY);
+  }
+}
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/workspace";
 
-  const [username, setUsername] = useState("");
+  const [ username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(REMEMBERED_USERNAME_KEY);
-    if (saved) {
-      setUsername(saved);
-      setRememberMe(true);
-    }
+    void loadCredentials().then((creds) => {
+      if (creds) {
+        setUsername(creds.username);
+        setRememberMe(creds.rememberMe);
+      }
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,13 +113,11 @@ function LoginForm() {
     setLoading(true);
 
     // better-auth requires valid email (Zod z.email() needs a TLD); username@local.app is the internal convention
-    const email = username.includes("@") ? username : `${username}@local.app`;
+    const email = username.includes("@")
+      ? username
+      : `${username}@local.app`;
 
-    if (rememberMe) {
-      localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
-    } else {
-      localStorage.removeItem(REMEMBERED_USERNAME_KEY);
-    }
+    await saveCredentials(username, rememberMe);
 
     const { error: authError } = await authClient.signIn.email({
       email,

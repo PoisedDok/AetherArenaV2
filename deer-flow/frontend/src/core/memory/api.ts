@@ -1,6 +1,6 @@
 import { getBackendBaseURL } from "../config";
 
-import type { UserMemory } from "./types";
+import type { MemoryConfig, UserMemory } from "./types";
 
 export async function loadMemory() {
   const memory = await fetch(`${getBackendBaseURL()}/api/memory`);
@@ -34,4 +34,20 @@ export async function updateMemorySection(section: string, summary: string): Pro
   });
   if (!res.ok) throw new Error(`Failed to update section: ${res.statusText}`);
   return res.json() as Promise<UserMemory>;
+}
+
+export async function loadMemoryConfig(): Promise<MemoryConfig> {
+  const res = await fetch(`${getBackendBaseURL()}/api/memory/config`);
+  if (!res.ok) throw new Error(`Failed to load memory config: ${res.statusText}`);
+  return res.json() as Promise<MemoryConfig>;
+}
+
+export async function updateMemoryModelName(modelName: string | null): Promise<MemoryConfig> {
+  const res = await fetch(`${getBackendBaseURL()}/api/memory/config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_name: modelName }),
+  });
+  if (!res.ok) throw new Error(`Failed to update memory model: ${res.statusText}`);
+  return res.json() as Promise<MemoryConfig>;
 }

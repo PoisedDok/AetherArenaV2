@@ -4,6 +4,7 @@ import type { ChatStatus } from "ai";
 import {
   BotIcon,
   CheckIcon,
+  ClockIcon,
   CpuIcon,
   GraduationCapIcon,
   LayersIcon,
@@ -23,8 +24,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentProps,
 } from "react";
+import type { ComponentProps } from "react";
 
 import {
   PromptInput,
@@ -74,6 +75,9 @@ import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
 import type { Model } from "@/core/models/types";
+import { matchProviderForModel, PROVIDER_DEFINITIONS } from "@/core/providers/definitions";
+import { useOpenRouterModels } from "@/core/providers/hooks";
+import { subscribe as subscribeQueue, getSnapshot as getQueueSnapshot } from "@/core/queue";
 import { useLocalSettings } from "@/core/settings";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { AgentThreadContext } from "@/core/threads";
@@ -180,6 +184,7 @@ export function InputBox({
   onContextChange,
   onSubmit,
   onStop,
+  onRetry,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
   assistantId?: string | null;
@@ -207,12 +212,66 @@ export function InputBox({
   ) => void;
   onSubmit?: (message: PromptInputMessage) => void;
   onStop?: () => void;
-}) {
+  onRetry?: () => void;
+}): React.ReactElement {
   const { t } = useI18n();
   const [localSettings] = useLocalSettings();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
-  const { models } = useModels();
+  const { models: configModels } = useModels();
+
+  // Derive the provider ID consistently with Settings page
+  const resolvedProviderId = useMemo(() => {
+    const saved = localSettings.context.selected_provider_id;
+    if (saved) {
+      const def = PROVIDER_DEFINITIONS.find((p) => p.id === saved);
+      if (def) return saved;
+    }
+    const modelName: string | undefined =
+      typeof context.model_name === "string" && context.model_name.length > 0
+        ? context.model_name
+        : undefined;
+    if (modelName) {
+      return matchProviderForModel("", null, modelName);
+    }
+    return PROVIDER_DEFINITIONS[0]?.id ?? "";
+  }, [localSettings.context.selected_provider_id, context.model_name]);
+
+  const { data: openRouterData } = useOpenRouterModels(
+    resolvedProviderId === "openrouter",
+  );
+
+  // Build model list based on selected provider
+  const models = useMemo(() => {
+    const result: Model[] = [];
+    for (const m of configModels) {
+      const pid = matchProviderForModel(m.provider_use, m.endpoint_url);
+      if (pid === resolvedProviderId) {
+        result.push(m);
+      }
+    }
+
+    // If OpenRouter is selected, also include live models from the catalog
+    if (resolvedProviderId === "openrouter" && openRouterData?.models) {
+      const configModelIds = new Set(configModels.map((m) => m.model));
+      for (const liveModel of openRouterData.models) {
+        if (!configModelIds.has(liveModel.id)) {
+          result.push({
+            name: liveModel.id,
+            model: liveModel.id,
+            display_name: liveModel.name,
+            description: liveModel.description,
+            supports_thinking: liveModel.supports_thinking,
+            supports_vision: liveModel.supports_vision,
+            provider_use: "openrouter",
+            endpoint_url: "https://openrouter.ai/api/v1",
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [configModels, openRouterData, resolvedProviderId]);
   const { thread, isMock } = useThread();
   const { textInput } = usePromptInputController();
   const promptRootRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +286,21 @@ export function InputBox({
   const [pendingSuggestion, setPendingSuggestion] = useState<string | null>(
     null,
   );
+
+  // Queue state — tracks per-thread enqueued messages
+  const [queueSize, setQueueSize] = useState(0);
+  const [queuedItems, setQueuedItems] = useState<{ text: string; hasAttachments: boolean }[]>([]);
+
+  useEffect(() => {
+    const syncQueue = () => {
+      const snapshot = getQueueSnapshot();
+      const forThread = snapshot.filter((m) => m.threadId === threadId);
+      setQueueSize(forThread.length);
+      setQueuedItems(forThread.map((m) => ({ text: m.text, hasAttachments: m.hasAttachments })));
+    };
+    syncQueue();
+    return subscribeQueue(syncQueue);
+  }, [threadId]);
 
   useEffect(() => {
     if (!localSettings.behavior.auto_followup) {
@@ -323,6 +397,10 @@ export function InputBox({
         onStop?.();
         return;
       }
+      if (status === "error") {
+        onRetry?.();
+        return;
+      }
       if (!message.text) {
         return;
       }
@@ -356,7 +434,7 @@ export function InputBox({
       setFollowupsLoading(false);
       onSubmit?.(message);
     },
-    [onSubmit, onStop, status],
+    [onSubmit, onStop, onRetry, status],
   );
 
   const requestFormSubmit = useCallback(() => {
@@ -912,6 +990,12 @@ export function InputBox({
           </div>
         )}
 
+      {queueSize > 0 && (
+        <div className="absolute right-4 -top-14 z-20">
+          <QueueIndicator count={queueSize} items={queuedItems} />
+        </div>
+      )}
+
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1003,6 +1087,47 @@ function SuggestionList() {
         </DropdownMenuContent>
       </DropdownMenu>
     </Suggestions>
+  );
+}
+
+function QueueIndicator({
+  count,
+  items,
+}: {
+  count: number;
+  items: { text: string; hasAttachments: boolean }[];
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded-full bg-muted/80 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <ClockIcon className="size-3.5" />
+          <span>{count}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Queued messages
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {items.map((item, index) => (
+          <DropdownMenuItem
+            key={index}
+            onSelect={(e) => e.preventDefault()}
+            className="gap-2 py-2"
+          >
+            <ClockIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+            <span className="line-clamp-2 flex-1 text-sm">{item.text}</span>
+            {item.hasAttachments && (
+              <PaperclipIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

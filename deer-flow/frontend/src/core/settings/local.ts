@@ -12,6 +12,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     vision_model_name: undefined,
     mode: undefined,
     reasoning_effort: undefined,
+    selected_provider_id: undefined,
   },
   layout: {
     sidebar_collapsed: true,
@@ -24,7 +25,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   guru: {
     enabled: true,
     muted: false,
-    model_name: "lfm",
+    model_name: null,
   },
 };
 
@@ -45,6 +46,8 @@ export interface LocalSettings {
   > & {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
+    /** Last-selected provider in the settings tab — purely local. */
+    selected_provider_id?: string;
   };
   layout: {
     sidebar_collapsed: boolean;
