@@ -4,19 +4,22 @@ overview: "Fix two compounding bugs: (1) partial AI response vanishes from UI af
 todos:
   - id: remove-premature-frozen-clear
     content: "In hooks.ts line 435: Delete `setFrozenMessages(null);` — the effect at line 396 correctly clears frozen on server response; this premature clear is the root cause of partial content vanishing."
-    status: pending
+    status: done
   - id: reset-send-gate-in-stop
     content: "In hooks.ts stopStream(): Add `sendInFlightRef.current = false;` immediately after `await thread.stop();` (after line 712) so the send gate is deterministically open after manual stops, not relying on async finally block."
-    status: pending
+    status: done
   - id: process-queue-after-stop
     content: "In hooks.ts stopStream(): After resetting sendInFlightRef, add a microtask-delayed call to `processQueueIfReady` that auto-submits queued messages for the current thread — matching the existing behavior in onFinish/onError. Use threadIdRef.current for the thread ID."
-    status: pending
+    status: done
   - id: fix-input-box-streaming-return
     content: "In input-box.tsx lines 396-399: Replace the early return `if (status === 'streaming') { onStop?.(); return; }` with `if (status === 'streaming') { onStop?.(); setTimeout(() => onSubmit?.(message), 100); return; }` — stop first, then submit after stop propagates."
-    status: pending
+    status: done
   - id: verify-all-flows-non-breaking
     content: "Mental simulation complete for: normal send, stop+send, error+retry, queue auto-dispatch, double-send. All verified non-breaking. No additional files (page.tsx, prompt-input.tsx, message-list.tsx, queue manager) need changes."
-    status: pending
+    status: done
+  - id: tests-added
+    content: "Added 4 tests to turnProcessor.test.ts: double-drain idempotency, cross-thread isolation, post-drain re-enqueue, rapid stop+send. All 28 tests pass, 0 type errors."
+    status: done
 isProject: false
 ---
 
