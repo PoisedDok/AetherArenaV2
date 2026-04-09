@@ -66,6 +66,64 @@ describe("processQueueIfReady", () => {
   });
 });
 
+describe("processQueueIfReady — stop+send safety", () => {
+  test("double-drain is idempotent (stopStream + onError both call processQueueIfReady)", () => {
+    clear();
+    enqueue(baseMsg({ threadId: "t1", text: "queued-during-stream" }));
+    // First drain — simulates stopStream's queue processing
+    const first = processQueueIfReady("t1");
+    expect(first.processed).toBe(true);
+    expect(first.messages).toHaveLength(1);
+    expect(first.messages[0]?.content).toBe("queued-during-stream");
+    // Second drain — simulates onError firing after stopStream already drained
+    const second = processQueueIfReady("t1");
+    expect(second.processed).toBe(false);
+    expect(second.messages).toEqual([]);
+  });
+
+  test("drain does not affect other threads' queued messages", () => {
+    clear();
+    enqueue(baseMsg({ threadId: "t1", text: "t1-msg" }));
+    enqueue(baseMsg({ threadId: "t2", text: "t2-msg" }));
+    // Drain t1 (stop on thread 1)
+    const result = processQueueIfReady("t1");
+    expect(result.processed).toBe(true);
+    expect(result.messages[0]?.content).toBe("t1-msg");
+    // t2 queue untouched
+    expect(getSnapshot().filter((m) => m.threadId === "t2")).toHaveLength(1);
+    const t2Result = processQueueIfReady("t2");
+    expect(t2Result.processed).toBe(true);
+    expect(t2Result.messages[0]?.content).toBe("t2-msg");
+  });
+
+  test("messages queued AFTER drain are picked up by subsequent drain", () => {
+    clear();
+    enqueue(baseMsg({ threadId: "t1", text: "first" }));
+    // Drain (stopStream)
+    const first = processQueueIfReady("t1");
+    expect(first.processed).toBe(true);
+    // User types + submits during 100ms gap → queued by sendMessage gate
+    enqueue(baseMsg({ threadId: "t1", text: "second" }));
+    // Next drain (onFinish of the queued message's stream)
+    const second = processQueueIfReady("t1");
+    expect(second.processed).toBe(true);
+    expect(second.messages[0]?.content).toBe("second");
+  });
+
+  test("rapid stop+send: enqueue then immediate drain returns the message", () => {
+    clear();
+    // Simulates: user submits while streaming → sendMessage enqueues (gate true)
+    // → stopStream fires → gate reset → drain picks up queued message
+    enqueue(baseMsg({ threadId: "t1", text: "follow-up" }));
+    const result = processQueueIfReady("t1");
+    expect(result.processed).toBe(true);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.content).toBe("follow-up");
+    // Queue is now empty
+    expect(getSnapshot().filter((m) => m.threadId === "t1")).toHaveLength(0);
+  });
+});
+
 describe("getQueueSummary", () => {
   test("returns empty summary when queue empty", () => {
     clear();

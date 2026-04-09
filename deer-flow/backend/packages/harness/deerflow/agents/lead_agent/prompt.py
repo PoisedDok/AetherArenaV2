@@ -210,7 +210,7 @@ When using web_search/web_fetch results, ALWAYS cite sources:
 - Never make claims from search results without a citation
 </citations>
 
-<critical_reminders>
+{interrupted_response}<critical_reminders>
 - **Clarification First**: ALWAYS ask unclear/missing/ambiguous requirements in chat BEFORE starting work — never assume or guess
 {subagent_reminder}- Skill First: Always load the relevant skill before starting **complex** tasks.
 - Progressive Loading: Load resources incrementally as referenced in skills
@@ -338,7 +338,7 @@ def get_deferred_tools_prompt_section() -> str:
     return f"<available-deferred-tools>\n{names}\n</available-deferred-tools>"
 
 
-def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None) -> str:
+def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None, interrupted_response: str | None = None) -> str:
     # Get memory context
     memory_context = _get_memory_context(agent_name)
 
@@ -364,6 +364,16 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         else ""
     )
 
+    # Build interrupted response section — injected when user stopped a prior AI response
+    # mid-stream. LangGraph checkpoints do not include partial AI content, so this is
+    # the only way the model can know what it had already said.
+    interrupted_response_section = (
+        f"<interrupted_response>\nThe following is your previous response that was interrupted by the user before it completed. "
+        f"You have full context of what you already said:\n{interrupted_response}\n</interrupted_response>\n\n"
+        if interrupted_response
+        else ""
+    )
+
     # Get skills section
     skills_section = get_skills_prompt_section(available_skills)
 
@@ -380,6 +390,7 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         subagent_section=subagent_section,
         subagent_reminder=subagent_reminder,
         subagent_thinking=subagent_thinking,
+        interrupted_response=interrupted_response_section,
     )
 
     return prompt + f"\n<current_date>{datetime.now().strftime('%Y-%m-%d, %A')}</current_date>"

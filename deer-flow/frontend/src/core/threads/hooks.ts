@@ -2,7 +2,7 @@ import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -179,6 +179,9 @@ export function useThreadStream({
   // Track the server-created thread ID to prevent the threadId prop sync from
   // overwriting it with the client UUID after isNewThread flips.
   const serverThreadIdRef = useRef<string | null>(null);
+  // Track the last threadId prop so we can distinguish a genuine thread switch
+  // (threadId changed) from an error-recovery streamRestartKey bump (same thread).
+  const prevThreadIdPropRef = useRef<string | null | undefined>(threadId);
 
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
@@ -194,10 +197,32 @@ export function useThreadStream({
     startedRef.current = false;
 
     // Don't overwrite the server-created thread ID with the client UUID when
-    // isNewThread flips after onThreadCreated fires.
-    if (serverThreadIdRef.current && serverThreadIdRef.current !== normalizedThreadId) {
+    // isNewThread flips after onThreadCreated fires. The server ID and client
+    // UUID are equal once the thread URL has been updated, so only bail out when
+    // they differ (i.e. the prop still carries the old client UUID).
+    if (
+      serverThreadIdRef.current &&
+      serverThreadIdRef.current !== normalizedThreadId &&
+      normalizedThreadId !== null
+    ) {
       return;
     }
+
+    // If the threadId prop itself changed (not just streamRestartKey on same thread),
+    // clear all transient UI state so the old chat's messages don't bleed into the
+    // new thread's view.
+    const threadIdPropChanged = prevThreadIdPropRef.current !== threadId;
+    prevThreadIdPropRef.current = threadId;
+    if (threadIdPropChanged) {
+      serverThreadIdRef.current = null;
+      setOptimisticMessages([]);
+      setFrozenMessages(null);
+      setPinnedPartials([]);
+      frozenIdsRef.current = new Set();
+      sendInFlightRef.current = false;
+      prevMsgCountRef.current = 0;
+    }
+
     setOnStreamThreadId(normalizedThreadId);
   }, [threadId, streamRestartKey]);
 
@@ -313,6 +338,7 @@ export function useThreadStream({
         const activeThread = threadIdRef.current ?? threadId;
         if (!activeThread) return;
         const result = processQueueIfReady(activeThread);
+        console.log("[step:5-onError:drain] processed=", result.processed, "queued msgs=", result.messages.length);
         if (result.processed && result.messages.length > 0) {
           for (const msg of result.messages) {
             if (!threadIdRef.current) break;
@@ -368,6 +394,7 @@ export function useThreadStream({
         const activeThread = threadIdRef.current ?? threadId;
         if (!activeThread) return;
         const result = processQueueIfReady(activeThread);
+        console.log("[step:5-onFinish:drain] processed=", result.processed, "queued msgs=", result.messages.length);
         if (result.processed && result.messages.length > 0) {
           sendInFlightRef.current = false;
           for (const msg of result.messages) {
@@ -387,22 +414,100 @@ export function useThreadStream({
   const prevMsgCountRef = useRef(thread.messages.length);
 
   // Messages frozen at stop time — keeps partial streamed content visible until
-  // the next submit's server response arrives and replaces them.
+  // the new AI turn starts streaming. At that point frozen is cleared and
+  // uncommitted messages from frozen are promoted to pinnedPartials.
   const [frozenMessages, setFrozenMessages] = useState<Message[] | null>(null);
 
-  // Clear optimistic + frozen when server messages arrive (count increases past
-  // what we saw before the submit). Also signal Guru that streaming has started —
-  // but only when a real send is in-flight (not on initial history rehydration).
+  // Messages from a previous frozen snapshot that were never committed to the
+  // server checkpoint (partial AI tokens + any interrupted human messages).
+  // Injected into mergedThread at the split point until pinnedPartials is cleared.
+  const [pinnedPartials, setPinnedPartials] = useState<Message[]>([]);
+
+  // Stores the set of frozen message ids at the time frozen was cleared, so
+  // mergedThread can find the injection point for pinnedPartials.
+  const frozenIdsRef = useRef<Set<string>>(new Set());
+  // Tracks last logged mergedThread count to suppress per-render log spam.
+  const lastLoggedMergedCountRef = useRef(-1);
+
+  // Build a stable set of human message texts in frozen for the clearing condition.
+  const frozenHumanTexts = useMemo(() => {
+    if (!frozenMessages) return null;
+    const texts = new Set<string>();
+    for (const m of frozenMessages) {
+      if (m.type !== "human") continue;
+      const t = typeof m.content === "string"
+        ? m.content.trim()
+        : Array.isArray(m.content)
+          ? m.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim()
+          : "";
+      if (t) texts.add(t);
+    }
+    return texts;
+  }, [frozenMessages]);
+
+  // Clear optimistic + frozen when the server confirms the next submission.
+  //
+  // Two separate strategies:
+  //   (a) No frozen: clear optimistic when thread.messages grows past the count
+  //       recorded at submit time (prevMsgCountRef). This handles the normal flow.
+  //   (b) Frozen is set (after a stop/error): clear frozen + optimistic when
+  //       thread.messages contains a human message that was NOT in frozen — i.e.
+  //       the server has received and committed the next user message. We cannot
+  //       use the count strategy here because after stop the SDK resets
+  //       thread.messages to the checkpoint (which is shorter than frozen), so the
+  //       threshold set at submit time would never be crossed.
   useEffect(() => {
+    if (frozenMessages !== null && frozenHumanTexts !== null) {
+      // After stop: wait for new AI turn to start before clearing frozen.
+      // Clearing on human arrival alone would drop the partial AI from frozen
+      // before the new response arrives.
+      let newHumanIdx = -1;
+      for (let i = 0; i < thread.messages.length; i++) {
+        const m = thread.messages[i]!;
+        if (m.type !== "human") continue;
+        const t = typeof m.content === "string"
+          ? m.content.trim()
+          : Array.isArray(m.content)
+            ? m.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim()
+            : "";
+        if (t && !frozenHumanTexts.has(t)) {
+          newHumanIdx = i;
+          break;
+        }
+      }
+      const hasNewAiAfterHuman = newHumanIdx >= 0 &&
+        thread.messages.slice(newHumanIdx + 1).some((m) => m.type === "ai");
+      console.log("[step:4-frozen-watch] thread=", thread.messages.length, "newHumanIdx=", newHumanIdx, "hasNewAiAfterHuman=", hasNewAiAfterHuman, "frozen=", frozenMessages.length);
+      if (hasNewAiAfterHuman) {
+        // Extract uncommitted messages from frozen (dropped by LangGraph checkpoint on stop).
+        // Pin them so they stay visible alongside the new conversation.
+        const realIds = new Set(thread.messages.map((m) => (m as { id?: string }).id).filter(Boolean));
+        const allFrozenIds = new Set(frozenMessages.map((m) => (m as { id?: string }).id).filter(Boolean) as string[]);
+        const partials = frozenMessages.filter((m) => {
+          const id = (m as { id?: string }).id;
+          return id ? !realIds.has(id) : false;
+        });
+        console.log("[step:4-frozen-clear] new AI turn detected → clearing frozen, pinning", partials.length, "uncommitted msgs");
+        frozenIdsRef.current = allFrozenIds;
+        if (partials.length > 0) setPinnedPartials(partials);
+        prevMsgCountRef.current = thread.messages.length;
+        setFrozenMessages(null);
+        if (optimisticMessages.length > 0) setOptimisticMessages([]);
+        window.dispatchEvent(new CustomEvent("guru:state", { detail: "streaming" }));
+      }
+      return;
+    }
+
+    // Normal flow: clear optimistic when server count exceeds our pre-submit baseline.
     if (thread.messages.length > prevMsgCountRef.current) {
+      prevMsgCountRef.current = thread.messages.length;
+      console.log("[step:4-optimistic-clear] server responded, clearing optimistic, newCount=", prevMsgCountRef.current);
       if (optimisticMessages.length > 0) setOptimisticMessages([]);
-      if (frozenMessages !== null) setFrozenMessages(null);
-      // Only fire streaming state if user actually sent something (not history load)
       if (optimisticMessages.length > 0) {
         window.dispatchEvent(new CustomEvent("guru:state", { detail: "streaming" }));
       }
     }
-  }, [thread.messages.length, optimisticMessages.length, frozenMessages]);
+  }, [thread.messages, thread.messages.length, optimisticMessages.length, frozenMessages, frozenHumanTexts]);
 
   const sendMessage = useCallback(
     async (
@@ -411,8 +516,10 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
     ) => {
       const trimmedText = message.text.trim();
+      console.log("[step:1-sendMessage] text=", trimmedText.slice(0,20), "inFlight=", sendInFlightRef.current, "frozen=", frozenMessages?.length ?? null);
       if (sendInFlightRef.current) {
         if (trimmedText) {
+          console.log("[step:1-sendMessage:enqueue] queued during stream:", trimmedText.slice(0,20));
           enqueue({
             threadId: threadId,
             text: trimmedText,
@@ -429,10 +536,12 @@ export function useThreadStream({
       // Capture current count before showing optimistic messages.
       // Use frozenMessages length if available (after a stop, thread.messages
       // reverts to the checkpoint and may be shorter than what the user saw).
-      const baseMessages = frozenMessages ?? thread.messages;
-      prevMsgCountRef.current = baseMessages.length;
-      // Clear frozen now that a new submit is underway
-      setFrozenMessages(null);
+      prevMsgCountRef.current = thread.messages.length;
+      console.log("[step:2-sendMessage:submit] prevMsgCount=", prevMsgCountRef.current, "frozen=", frozenMessages?.length ?? null, "thread=", thread.messages.length);
+      // Do NOT clear frozenMessages here — clearing it eagerly causes partial AI
+      // content to vanish from the UI before the server response arrives.
+      // The effect at line 396 clears frozen when thread.messages.length increases
+      // past prevMsgCountRef (i.e. server has confirmed the new message).
 
       // Build optimistic files list with uploading status
       const optimisticFiles: FileInMessage[] = (message.files ?? []).map(
@@ -613,6 +722,27 @@ export function useThreadStream({
             ? rawExtra.agent_name
             : undefined;
 
+        // Extract partial AI text from frozen/pinned state so the backend can include
+        // it in the system prompt. LangGraph does not commit partial AI content to
+        // checkpoints on stop, so this is the only way the model knows what it said.
+        const partialSource = frozenMessages ?? (pinnedPartials.length > 0 ? pinnedPartials : null);
+        const interruptedResponseText = partialSource
+          ? partialSource
+              .filter((m) => m.type === "ai")
+              .map((m) => {
+                if (typeof m.content === "string") return m.content.trim();
+                if (Array.isArray(m.content)) {
+                  return m.content
+                    .map((c) => (c.type === "text" ? (c as { type: string; text: string }).text : ""))
+                    .join("")
+                    .trim();
+                }
+                return "";
+              })
+              .filter(Boolean)
+              .join("\n\n") || null
+          : null;
+
         // Build runtime context for LangGraph ≥0.6.
         // Do NOT include `configurable` inside `config`; LangGraph rejects requests
         // that specify both `config.configurable` and `context`. When only
@@ -630,6 +760,10 @@ export function useThreadStream({
           is_bootstrap: isBootstrap,
           auto_memory: behavior.auto_memory,
         };
+        if (interruptedResponseText) {
+          runContext.interrupted_response = interruptedResponseText;
+          console.log("[step:2-sendMessage:interrupted_response] injecting partial AI text, length=", interruptedResponseText.length);
+        }
         if (reasoningEffort !== undefined) {
           runContext.reasoning_effort = reasoningEffort;
         }
@@ -689,7 +823,7 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient, frozenMessages],
+    [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient, frozenMessages, pinnedPartials],
   );
 
   // Wrap thread.stop() to freeze visible messages before the SDK reverts them.
@@ -697,34 +831,109 @@ export function useThreadStream({
   // streaming content). We capture the current messages first so the UI keeps
   // showing them until the next submit's server response arrives.
   const stopStream = useCallback(async () => {
-    // Capture what the user can currently see (optimistic + real)
-    const currentlyVisible =
-      optimisticMessages.length > 0
-        ? [...thread.messages, ...optimisticMessages]
-        : thread.messages.length > 0
-          ? [...thread.messages]
-          : null;
+    // Capture what the user can currently see (optimistic + pinned + real).
+    // Include pinnedPartials from a previous stop so they survive into the new frozen.
+    const buildVisible = (): Message[] | null => {
+      const frozenIds = frozenIdsRef.current;
+      let base: Message[];
+      if (frozenIds.size > 0 && pinnedPartials.length > 0) {
+        // Rebuild with pinned injected (same logic as mergedThread)
+        let splitIdx = thread.messages.findIndex(
+          (m) => !frozenIds.has((m as { id?: string }).id ?? "")
+        );
+        if (splitIdx === -1) splitIdx = thread.messages.length;
+        base = [
+          ...thread.messages.slice(0, splitIdx),
+          ...pinnedPartials,
+          ...thread.messages.slice(splitIdx),
+        ];
+      } else {
+        base = thread.messages;
+      }
+      if (optimisticMessages.length > 0) return [...base, ...optimisticMessages];
+      if (base.length > 0) return [...base];
+      return null;
+    };
+    const currentlyVisible = buildVisible();
+    // Clear any previous pinnedPartials — the new frozen snapshot supersedes them.
+    if (pinnedPartials.length > 0) {
+      setPinnedPartials([]);
+      frozenIdsRef.current = new Set();
+    }
     if (currentlyVisible && currentlyVisible.length > 0) {
+      console.log("[step:3-stopStream:freeze] freezing", currentlyVisible.length, "msgs (thread=", thread.messages.length, "pinned=", pinnedPartials.length, "):", currentlyVisible.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,20):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,20):"?"}`) );
       setFrozenMessages(currentlyVisible);
     }
     // Signal Guru to settle — user stopped the stream
     window.dispatchEvent(new CustomEvent("guru:state", { detail: "idle" }));
     await thread.stop();
-  }, [thread, optimisticMessages]);
+    console.log("[step:3-stopStream:stopped] sendInFlight reset to false");
+    // Deterministically open the send gate after manual stop — the async finally
+    // block in sendMessage races with this, so we reset explicitly here.
+    sendInFlightRef.current = false;
+    // Drain any queued messages for this thread (microtask-delayed so React can
+    // flush the stop state before a new submit is triggered). This matches the
+    // queue-drain behavior already present in onFinish/onError.
+    void Promise.resolve().then(async () => {
+      const activeThread = threadIdRef.current;
+      if (!activeThread) return;
+      const result = processQueueIfReady(activeThread);
+      console.log("[step:3-stopStream:drain] processed=", result.processed, "queued msgs=", result.messages.length);
+      if (result.processed && result.messages.length > 0) {
+        for (const msg of result.messages) {
+          if (!threadIdRef.current) break;
+          await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
+        }
+      }
+    });
+  }, [thread, optimisticMessages, pinnedPartials, sendMessage]);
 
-  // Merge thread with optimistic/frozen messages for display.
-  // Priority: if frozenMessages exist, use them as the base (they include partial
-  // streamed content captured at stop time). Otherwise use thread.messages.
-  // On top of either base, append any pending optimistic messages (deduplicated).
+  // Compute the message list to display.
+  //
+  // Three layers, in priority order:
+  //   1. frozenMessages — full snapshot captured at stop time. Used as base while
+  //      server processes the next message. Cleared when new AI turn starts.
+  //   2. pinnedPartials — uncommitted messages extracted from frozen when it clears.
+  //      Injected into thread.messages at the split point (after last committed msg)
+  //      so the user keeps seeing them even after the checkpoint reverts.
+  //   3. optimisticMessages — human message shown immediately after submit, before
+  //      server echoes it back. Deduped against base to avoid double-rendering.
   const mergedThread = (() => {
-    const baseMessages = frozenMessages ?? thread.messages;
-
-    if (optimisticMessages.length === 0) {
-      if (frozenMessages === null) return thread;
-      return { ...thread, messages: frozenMessages } as typeof thread;
+    // --- Phase 1: determine base ---
+    let baseMessages: Message[];
+    if (frozenMessages !== null) {
+      // Stream was stopped; show frozen snapshot until new AI turn begins.
+      baseMessages = frozenMessages;
+    } else if (pinnedPartials.length > 0) {
+      // Frozen was cleared; inject pinned uncommitted messages at the split point.
+      // Split point = first message in thread.messages whose id was NOT in the
+      // old frozen (frozenIdsRef). Everything before the split is shared history;
+      // insert pinnedPartials right before the new messages.
+      const frozenIds = frozenIdsRef.current;
+      let splitIdx = thread.messages.findIndex(
+        (m) => !frozenIds.has((m as { id?: string }).id ?? "")
+      );
+      if (splitIdx === -1) splitIdx = thread.messages.length; // all are shared, append
+      baseMessages = [
+        ...thread.messages.slice(0, splitIdx),
+        ...pinnedPartials,
+        ...thread.messages.slice(splitIdx),
+      ];
+      if (baseMessages.length !== lastLoggedMergedCountRef.current) {
+        lastLoggedMergedCountRef.current = baseMessages.length;
+        console.log("[step:6-mergedThread] pinned injection at idx=", splitIdx, "total=", baseMessages.length, "msgs=", baseMessages.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,15):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,15):"?"}`));
+      }
+    } else {
+      baseMessages = thread.messages;
     }
 
-    const realHumanTexts = new Set(
+    // --- Phase 2: append deduped optimistic ---
+    if (optimisticMessages.length === 0) {
+      if (baseMessages === thread.messages) return thread; // no changes, reuse object
+      return { ...thread, messages: baseMessages } as typeof thread;
+    }
+
+    const baseHumanTexts = new Set(
       baseMessages
         .filter((m) => m.type === "human")
         .map((m) => {
@@ -749,14 +958,18 @@ export function useThreadStream({
                 .join("")
                 .trim()
             : "";
-      return !realHumanTexts.has(text);
+      return !baseHumanTexts.has(text);
     });
-    if (deduped.length === 0) {
-      return { ...thread, messages: baseMessages } as typeof thread;
+
+    const finalMsgs = deduped.length === 0 ? baseMessages : [...baseMessages, ...deduped];
+    if (finalMsgs.length !== lastLoggedMergedCountRef.current) {
+      lastLoggedMergedCountRef.current = finalMsgs.length;
+      console.log("[step:6-mergedThread] base=", frozenMessages?"frozen":pinnedPartials.length>0?"pinned":"thread", "base=", baseMessages.length, "optimistic=", deduped.length, "total=", finalMsgs.length, "msgs=", finalMsgs.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,15):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,15):"?"}`));
     }
+    if (deduped.length === 0 && baseMessages === thread.messages) return thread;
     return {
       ...thread,
-      messages: [...baseMessages, ...deduped],
+      messages: finalMsgs,
     } as typeof thread;
   })();
 

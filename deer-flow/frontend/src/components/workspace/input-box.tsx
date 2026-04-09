@@ -394,9 +394,16 @@ export function InputBox({
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (status === "streaming") {
+        // Enqueue the message first (sendInFlightRef is true during streaming,
+        // so sendMessage will queue it). Then stop — stopStream drains the queue.
+        console.log("[input-box] streaming: enqueue then stop, text=", message.text?.trim()?.slice(0,20));
+        if (message.text?.trim()) {
+          onSubmit?.(message);
+        }
         onStop?.();
         return;
       }
+      console.log("[input-box] status=", status, "submitting normally");
       if (status === "error") {
         onRetry?.();
         return;
