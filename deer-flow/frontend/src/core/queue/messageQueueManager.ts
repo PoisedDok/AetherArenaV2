@@ -102,6 +102,12 @@ export function getSize(): number {
   return queue.length;
 }
 
+export function removeById(id: string): void {
+  const before = queue.length;
+  queue = queue.filter((msg) => msg.id !== id);
+  if (queue.length !== before) notifyAll();
+}
+
 export function clear(predicate?: (msg: QueuedMessage) => boolean): void {
   if (!predicate) {
     queue = [];

@@ -168,6 +168,13 @@ export function useThreadStream({
   // and to allow access to the current thread id in onUpdateEvent
   const threadIdRef = useRef<string | null>(threadId ?? null);
   const startedRef = useRef(false);
+  // Ref to always-latest sendMessage — declared here so drain callbacks inside
+  // useStream can call sendMessageRef.current() and get the current version
+  // (which has the up-to-date `thread` object with the real threadId).
+  // Assigned after sendMessage is defined; noop placeholder for first render.
+  const sendMessageRef = useRef<(threadId: string, message: PromptInputMessage, extraContext?: Record<string, unknown>) => Promise<void>>(
+    async () => {},
+  );
 
   const listeners = useRef({
     onStart,
@@ -211,15 +218,38 @@ export function useThreadStream({
     // If the threadId prop itself changed (not just streamRestartKey on same thread),
     // clear all transient UI state so the old chat's messages don't bleed into the
     // new thread's view.
-    const threadIdPropChanged = prevThreadIdPropRef.current !== threadId;
+    const prevThreadId = prevThreadIdPropRef.current;
+    const threadIdPropChanged = prevThreadId !== threadId;
     prevThreadIdPropRef.current = threadId;
     if (threadIdPropChanged) {
+      // Determine whether this is a genuine navigation to a DIFFERENT conversation
+      // vs the server assigning a real thread ID to our just-created thread.
+      //
+      // When the user sends the very first message on a new thread:
+      //   1. threadId prop starts as null/clientUUID
+      //   2. LangGraph creates the thread → onCreated fires → onThreadCreated → URL
+      //      updates → threadId prop changes to the server-assigned ID
+      //   3. This effect fires with threadIdPropChanged=true, but the stream is
+      //      still in flight — resetting sendInFlightRef here would open the gate
+      //      while streaming, letting M2 bypass the queue (the core bug).
+      //
+      // Guard: only reset the gate if the new threadId is NOT the server-assigned
+      // ID for our current stream. If it matches, the "change" is just our own
+      // thread getting its canonical ID — don't touch in-flight state.
+      const isServerIdAssignment = normalizedThreadId !== null &&
+        serverThreadIdRef.current === normalizedThreadId;
+
       serverThreadIdRef.current = null;
       setOptimisticMessages([]);
       setFrozenMessages(null);
       setPinnedPartials([]);
       frozenIdsRef.current = new Set();
-      sendInFlightRef.current = false;
+      // Only reset the gate on a genuine thread navigation. For server-ID
+      // assignments (new thread getting its real ID mid-stream), the gate must
+      // stay locked — onFinish/onError/stopStream own the release.
+      if (!isServerIdAssignment) {
+        sendInFlightRef.current = false;
+      }
       prevMsgCountRef.current = 0;
     }
 
@@ -251,10 +281,18 @@ export function useThreadStream({
     reconnectOnMount: true,
     fetchStateHistory: { limit: 1 },
     onCreated(meta) {
+      // onCreated fires on EVERY run (not just new threads). Guard: only treat
+      // as a new-thread event when the thread_id is different from what we're
+      // already tracking. For subsequent messages on the same thread, skip the
+      // setOnStreamThreadId call (it would cause a spurious re-mount of useStream).
+      const isNewThread = serverThreadIdRef.current !== meta.thread_id &&
+        threadIdRef.current !== meta.thread_id;
       serverThreadIdRef.current = meta.thread_id;
       handleStreamStart(meta.thread_id);
-      setOnStreamThreadId(meta.thread_id);
-      onThreadCreated?.(meta.thread_id);
+      if (isNewThread) {
+        setOnStreamThreadId(meta.thread_id);
+        onThreadCreated?.(meta.thread_id);
+      }
     },
     onLangChainEvent(event) {
       if (event.event === "on_tool_end") {
@@ -332,20 +370,19 @@ export function useThreadStream({
 
       toast.error(getStreamErrorMessage(error));
 
-      // Auto-resubmit queued messages for this thread after a stream error,
-      // so users don't lose follow-ups when the run crashes (e.g. rate limit).
-      void (async () => {
+      // Auto-resubmit queued messages for this thread after a stream error.
+      // setTimeout(0) lets React flush pending state (incl. onStreamThreadId)
+      // before sendMessage calls thread.submit — preventing 409 on new threads.
+      setTimeout(() => {
         const activeThread = threadIdRef.current ?? threadId;
         if (!activeThread) return;
         const result = processQueueIfReady(activeThread);
-        console.log("[step:5-onError:drain] processed=", result.processed, "queued msgs=", result.messages.length);
         if (result.processed && result.messages.length > 0) {
-          for (const msg of result.messages) {
-            if (!threadIdRef.current) break;
-            await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
-          }
+          // Flush all queued messages as a single concatenated submission.
+          const combinedText = result.messages.map((m) => m.content).join("\n\n");
+          void sendMessageRef.current(activeThread, { text: combinedText, files: [] });
         }
-      })();
+      }, 0);
     },
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
@@ -389,20 +426,27 @@ export function useThreadStream({
         }
       }
 
-      // Auto-resubmit queued messages for this thread after stream completes
-      void (async () => {
+      // Release send gate synchronously — stream is fully done.
+      // MUST happen unconditionally so gate is always open after a stream ends.
+      sendInFlightRef.current = false;
+
+      // Drain queued messages. setTimeout(0) lets React flush pending state
+      // (including onStreamThreadId) before thread.submit is called, which
+      // prevents 409 "Thread already exists" errors on newly created threads.
+      setTimeout(() => {
         const activeThread = threadIdRef.current ?? threadId;
+        console.log("[queue:onFinish] drain check — thread=", activeThread, "threadIdRef=", threadIdRef.current, "threadId(closure)=", threadId);
         if (!activeThread) return;
         const result = processQueueIfReady(activeThread);
-        console.log("[step:5-onFinish:drain] processed=", result.processed, "queued msgs=", result.messages.length);
+        console.log("[queue:onFinish] processQueueIfReady →", result.processed, "msgs=", result.messages.length);
         if (result.processed && result.messages.length > 0) {
-          sendInFlightRef.current = false;
-          for (const msg of result.messages) {
-            if (!threadIdRef.current) break;
-            await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
-          }
+          // Flush all queued messages as one concatenated submission so the
+          // agent sees everything at once rather than in separate turns.
+          const combinedText = result.messages.map((m) => m.content).join("\n\n");
+          console.log("[queue:onFinish] sending combined flush, length=", combinedText.length);
+          void sendMessageRef.current(activeThread, { text: combinedText, files: [] });
         }
-      })();
+      }, 0);
     },
   });
 
@@ -410,6 +454,10 @@ export function useThreadStream({
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const sendInFlightRef = useRef(false);
+  // Always-current live count of thread.messages — updated every render so
+  // sendMessage (useCallback) can read the true current count without stale closure.
+  const liveMessageCountRef = useRef(thread.messages.length);
+  liveMessageCountRef.current = thread.messages.length;
   // Track message count before sending so we know when server has responded
   const prevMsgCountRef = useRef(thread.messages.length);
 
@@ -427,7 +475,6 @@ export function useThreadStream({
   // mergedThread can find the injection point for pinnedPartials.
   const frozenIdsRef = useRef<Set<string>>(new Set());
   // Tracks last logged mergedThread count to suppress per-render log spam.
-  const lastLoggedMergedCountRef = useRef(-1);
 
   // Build a stable set of human message texts in frozen for the clearing condition.
   const frozenHumanTexts = useMemo(() => {
@@ -477,7 +524,6 @@ export function useThreadStream({
       }
       const hasNewAiAfterHuman = newHumanIdx >= 0 &&
         thread.messages.slice(newHumanIdx + 1).some((m) => m.type === "ai");
-      console.log("[step:4-frozen-watch] thread=", thread.messages.length, "newHumanIdx=", newHumanIdx, "hasNewAiAfterHuman=", hasNewAiAfterHuman, "frozen=", frozenMessages.length);
       if (hasNewAiAfterHuman) {
         // Extract uncommitted messages from frozen (dropped by LangGraph checkpoint on stop).
         // Pin them so they stay visible alongside the new conversation.
@@ -487,7 +533,6 @@ export function useThreadStream({
           const id = (m as { id?: string }).id;
           return id ? !realIds.has(id) : false;
         });
-        console.log("[step:4-frozen-clear] new AI turn detected → clearing frozen, pinning", partials.length, "uncommitted msgs");
         frozenIdsRef.current = allFrozenIds;
         if (partials.length > 0) setPinnedPartials(partials);
         prevMsgCountRef.current = thread.messages.length;
@@ -499,9 +544,9 @@ export function useThreadStream({
     }
 
     // Normal flow: clear optimistic when server count exceeds our pre-submit baseline.
+    console.log("[queue:clearEffect] thread.messages.length=", thread.messages.length, "prevMsgCount=", prevMsgCountRef.current, "optimistic=", optimisticMessages.length, "frozen=", frozenMessages !== null);
     if (thread.messages.length > prevMsgCountRef.current) {
       prevMsgCountRef.current = thread.messages.length;
-      console.log("[step:4-optimistic-clear] server responded, clearing optimistic, newCount=", prevMsgCountRef.current);
       if (optimisticMessages.length > 0) setOptimisticMessages([]);
       if (optimisticMessages.length > 0) {
         window.dispatchEvent(new CustomEvent("guru:state", { detail: "streaming" }));
@@ -516,16 +561,16 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
     ) => {
       const trimmedText = message.text.trim();
-      console.log("[step:1-sendMessage] text=", trimmedText.slice(0,20), "inFlight=", sendInFlightRef.current, "frozen=", frozenMessages?.length ?? null);
+      console.log("[queue:sendMessage] called — inFlight=", sendInFlightRef.current, "text=", trimmedText.slice(0, 40));
       if (sendInFlightRef.current) {
         if (trimmedText) {
-          console.log("[step:1-sendMessage:enqueue] queued during stream:", trimmedText.slice(0,20));
           enqueue({
             threadId: threadId,
             text: trimmedText,
             priority: "next",
             hasAttachments: (message.files?.length ?? 0) > 0,
           });
+          console.log("[queue:sendMessage] enqueued (gate busy)");
         }
         return;
       }
@@ -534,10 +579,11 @@ export function useThreadStream({
       const text = trimmedText;
 
       // Capture current count before showing optimistic messages.
-      // Use frozenMessages length if available (after a stop, thread.messages
-      // reverts to the checkpoint and may be shorter than what the user saw).
-      prevMsgCountRef.current = thread.messages.length;
-      console.log("[step:2-sendMessage:submit] prevMsgCount=", prevMsgCountRef.current, "frozen=", frozenMessages?.length ?? null, "thread=", thread.messages.length);
+      // Read from liveMessageCountRef (updated every render) not thread.messages
+      // directly — sendMessage is a useCallback and thread.messages.length in its
+      // closure is stale when called from the onFinish drain setTimeout.
+      prevMsgCountRef.current = liveMessageCountRef.current;
+      console.log("[queue:sendMessage] proceeding — prevMsgCount=", prevMsgCountRef.current, "frozen=", frozenMessages !== null);
       // Do NOT clear frozenMessages here — clearing it eagerly causes partial AI
       // content to vanish from the UI before the server response arrives.
       // The effect at line 396 clears frozen when thread.messages.length increases
@@ -572,6 +618,7 @@ export function useThreadStream({
         });
       }
       setOptimisticMessages(newOptimistic);
+      console.log("[queue:sendMessage] setOptimisticMessages with", newOptimistic.length, "msgs");
 
       // Signal Guru to start pacing — user submitted, waiting for first token
       window.dispatchEvent(new CustomEvent("guru:state", { detail: "processing" }));
@@ -762,7 +809,6 @@ export function useThreadStream({
         };
         if (interruptedResponseText) {
           runContext.interrupted_response = interruptedResponseText;
-          console.log("[step:2-sendMessage:interrupted_response] injecting partial AI text, length=", interruptedResponseText.length);
         }
         if (reasoningEffort !== undefined) {
           runContext.reasoning_effort = reasoningEffort;
@@ -814,17 +860,25 @@ export function useThreadStream({
             context: runContext,
           },
         );
+        // submit() resolved → SSE stream is now connected.
+        // Gate (sendInFlightRef) stays true — owned by onFinish/onError/stopStream.
+        console.log("[queue:sendMessage] submit() resolved — SSE connected, gate stays true");
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       } catch (error) {
+        // submit() threw before SSE connected — onFinish/onError won't fire,
+        // so we must reset the gate here.
+        console.log("[queue:sendMessage] submit() threw:", error);
+        sendInFlightRef.current = false;
         setOptimisticMessages([]);
         setIsUploading(false);
         throw error;
-      } finally {
-        sendInFlightRef.current = false;
       }
     },
     [thread, _handleOnStart, t.uploads.uploadingFiles, context, queryClient, frozenMessages, pinnedPartials],
   );
+
+  // Keep sendMessageRef current after every memoization.
+  sendMessageRef.current = sendMessage;
 
   // Wrap thread.stop() to freeze visible messages before the SDK reverts them.
   // After stop(), thread.messages reverts to the last checkpoint (dropping partial
@@ -861,31 +915,24 @@ export function useThreadStream({
       frozenIdsRef.current = new Set();
     }
     if (currentlyVisible && currentlyVisible.length > 0) {
-      console.log("[step:3-stopStream:freeze] freezing", currentlyVisible.length, "msgs (thread=", thread.messages.length, "pinned=", pinnedPartials.length, "):", currentlyVisible.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,20):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,20):"?"}`) );
       setFrozenMessages(currentlyVisible);
     }
     // Signal Guru to settle — user stopped the stream
     window.dispatchEvent(new CustomEvent("guru:state", { detail: "idle" }));
     await thread.stop();
-    console.log("[step:3-stopStream:stopped] sendInFlight reset to false");
-    // Deterministically open the send gate after manual stop — the async finally
-    // block in sendMessage races with this, so we reset explicitly here.
+    // Deterministically open the send gate after manual stop.
     sendInFlightRef.current = false;
-    // Drain any queued messages for this thread (microtask-delayed so React can
-    // flush the stop state before a new submit is triggered). This matches the
-    // queue-drain behavior already present in onFinish/onError.
-    void Promise.resolve().then(async () => {
+    // Drain queued messages. setTimeout(0) lets React flush stop state before
+    // thread.submit is called (same guard as onFinish/onError drain).
+    setTimeout(() => {
       const activeThread = threadIdRef.current;
       if (!activeThread) return;
       const result = processQueueIfReady(activeThread);
-      console.log("[step:3-stopStream:drain] processed=", result.processed, "queued msgs=", result.messages.length);
       if (result.processed && result.messages.length > 0) {
-        for (const msg of result.messages) {
-          if (!threadIdRef.current) break;
-          await sendMessage(threadIdRef.current, { text: msg.content, files: [] });
-        }
+        const combinedText = result.messages.map((m) => m.content).join("\n\n");
+        void sendMessageRef.current(activeThread, { text: combinedText, files: [] });
       }
-    });
+    }, 0);
   }, [thread, optimisticMessages, pinnedPartials, sendMessage]);
 
   // Compute the message list to display.
@@ -903,6 +950,7 @@ export function useThreadStream({
     let baseMessages: Message[];
     if (frozenMessages !== null) {
       // Stream was stopped; show frozen snapshot until new AI turn begins.
+      console.log("[queue:mergedThread] using frozenMessages, count=", frozenMessages.length);
       baseMessages = frozenMessages;
     } else if (pinnedPartials.length > 0) {
       // Frozen was cleared; inject pinned uncommitted messages at the split point.
@@ -919,11 +967,8 @@ export function useThreadStream({
         ...pinnedPartials,
         ...thread.messages.slice(splitIdx),
       ];
-      if (baseMessages.length !== lastLoggedMergedCountRef.current) {
-        lastLoggedMergedCountRef.current = baseMessages.length;
-        console.log("[step:6-mergedThread] pinned injection at idx=", splitIdx, "total=", baseMessages.length, "msgs=", baseMessages.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,15):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,15):"?"}`));
-      }
     } else {
+      console.log("[queue:mergedThread] using thread.messages, count=", thread.messages.length);
       baseMessages = thread.messages;
     }
 
@@ -962,10 +1007,6 @@ export function useThreadStream({
     });
 
     const finalMsgs = deduped.length === 0 ? baseMessages : [...baseMessages, ...deduped];
-    if (finalMsgs.length !== lastLoggedMergedCountRef.current) {
-      lastLoggedMergedCountRef.current = finalMsgs.length;
-      console.log("[step:6-mergedThread] base=", frozenMessages?"frozen":pinnedPartials.length>0?"pinned":"thread", "base=", baseMessages.length, "optimistic=", deduped.length, "total=", finalMsgs.length, "msgs=", finalMsgs.map((m,i)=>`[${i}]${m.type}:${typeof m.content==="string"?m.content.slice(0,15):Array.isArray(m.content)?m.content.map(c=>c.type==="text"?c.text:"").join("").slice(0,15):"?"}`));
-    }
     if (deduped.length === 0 && baseMessages === thread.messages) return thread;
     return {
       ...thread,

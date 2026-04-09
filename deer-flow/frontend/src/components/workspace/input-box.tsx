@@ -77,7 +77,7 @@ import { useModels } from "@/core/models/hooks";
 import type { Model } from "@/core/models/types";
 import { matchProviderForModel, PROVIDER_DEFINITIONS } from "@/core/providers/definitions";
 import { useOpenRouterModels } from "@/core/providers/hooks";
-import { subscribe as subscribeQueue, getSnapshot as getQueueSnapshot } from "@/core/queue";
+import { subscribe as subscribeQueue, getSnapshot as getQueueSnapshot, removeById } from "@/core/queue";
 import { useLocalSettings } from "@/core/settings";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { AgentThreadContext } from "@/core/threads";
@@ -289,14 +289,14 @@ export function InputBox({
 
   // Queue state — tracks per-thread enqueued messages
   const [queueSize, setQueueSize] = useState(0);
-  const [queuedItems, setQueuedItems] = useState<{ text: string; hasAttachments: boolean }[]>([]);
+  const [queuedItems, setQueuedItems] = useState<{ id: string; text: string; hasAttachments: boolean }[]>([]);
 
   useEffect(() => {
     const syncQueue = () => {
       const snapshot = getQueueSnapshot();
       const forThread = snapshot.filter((m) => m.threadId === threadId);
       setQueueSize(forThread.length);
-      setQueuedItems(forThread.map((m) => ({ text: m.text, hasAttachments: m.hasAttachments })));
+      setQueuedItems(forThread.map((m) => ({ id: m.id, text: m.text, hasAttachments: m.hasAttachments })));
     };
     syncQueue();
     return subscribeQueue(syncQueue);
@@ -394,16 +394,14 @@ export function InputBox({
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (status === "streaming") {
-        // Enqueue the message first (sendInFlightRef is true during streaming,
-        // so sendMessage will queue it). Then stop — stopStream drains the queue.
-        console.log("[input-box] streaming: enqueue then stop, text=", message.text?.trim()?.slice(0,20));
+        // Queue the message and let the current stream finish naturally.
+        // sendMessage detects sendInFlightRef=true and enqueues. onFinish then
+        // drains the queue automatically — no stop needed, no interruption.
         if (message.text?.trim()) {
           onSubmit?.(message);
         }
-        onStop?.();
         return;
       }
-      console.log("[input-box] status=", status, "submitting normally");
       if (status === "error") {
         onRetry?.();
         return;
@@ -999,7 +997,7 @@ export function InputBox({
 
       {queueSize > 0 && (
         <div className="absolute right-4 -top-14 z-20">
-          <QueueIndicator count={queueSize} items={queuedItems} />
+          <QueueIndicator count={queueSize} items={queuedItems} onCancel={removeById} />
         </div>
       )}
 
@@ -1100,37 +1098,57 @@ function SuggestionList() {
 function QueueIndicator({
   count,
   items,
+  onCancel,
 }: {
   count: number;
-  items: { text: string; hasAttachments: boolean }[];
+  items: { id: string; text: string; hasAttachments: boolean }[];
+  onCancel: (id: string) => void;
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 rounded-full bg-muted/80 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+          className="flex max-w-[260px] items-center gap-1.5 rounded-full border border-amber-500/30 bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-amber-500/50 hover:bg-background hover:text-foreground"
         >
-          <ClockIcon className="size-3.5" />
-          <span>{count}</span>
+          <ClockIcon className="size-3.5 shrink-0 animate-pulse text-amber-500" />
+          {count > 1 && (
+            <span className="shrink-0 font-semibold text-amber-500">{count}</span>
+          )}
+          <span className="truncate">
+            {items[0] ? items[0].text.slice(0, 40) + (items[0].text.length > 40 ? "…" : "") : "queued"}
+          </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          Queued messages
+      <DropdownMenuContent align="end" sideOffset={8} className="w-80">
+        <DropdownMenuLabel className="flex items-center gap-2 pb-1 text-xs font-medium text-muted-foreground">
+          <ClockIcon className="size-3.5 text-amber-500" />
+          Queued — will send after current response
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {items.map((item, index) => (
+        {items.map((item) => (
           <DropdownMenuItem
-            key={index}
+            key={item.id}
             onSelect={(e) => e.preventDefault()}
-            className="gap-2 py-2"
+            className="group flex items-start gap-2 py-2.5"
           >
-            <ClockIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
-            <span className="line-clamp-2 flex-1 text-sm">{item.text}</span>
-            {item.hasAttachments && (
-              <PaperclipIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
-            )}
+            <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+              {items.indexOf(item) + 1}
+            </span>
+            <span className="line-clamp-2 flex-1 text-sm leading-snug">{item.text}</span>
+            <div className="flex shrink-0 items-center gap-1">
+              {item.hasAttachments && (
+                <PaperclipIcon className="size-3.5 text-muted-foreground/60" />
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onCancel(item.id); }}
+                className="rounded p-0.5 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                title="Remove from queue"
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
