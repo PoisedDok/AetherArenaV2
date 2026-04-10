@@ -15,6 +15,8 @@ from deerflow.config.model_config import ModelConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.skills_config import SkillsConfig
 from deerflow.config.subagents_config import load_subagents_config_from_dict
+from deerflow.config.compact_config import load_compact_config_from_dict
+from deerflow.config.doc_summarization_config import load_doc_summarization_config_from_dict
 from deerflow.config.summarization_config import load_summarization_config_from_dict
 from deerflow.config.title_config import load_title_config_from_dict
 from deerflow.config.tool_config import ToolConfig, ToolGroupConfig
@@ -95,6 +97,14 @@ class AppConfig(BaseModel):
         # Load summarization config if present
         if "summarization" in config_data:
             load_summarization_config_from_dict(config_data["summarization"])
+
+        # Load doc summarization config if present
+        if "doc_summarization" in config_data:
+            load_doc_summarization_config_from_dict(config_data["doc_summarization"])
+
+        # Load compact config if present
+        if "compact" in config_data:
+            load_compact_config_from_dict(config_data["compact"])
 
         # Load memory config if present
         if "memory" in config_data:

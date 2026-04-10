@@ -39,6 +39,45 @@ _MAX_REDIRECTS = 6
 _MAX_RESPONSE_BYTES = 500_000  # 500 KB raw HTML cap
 _WORKSPACE_DIR = "web_fetched"  # subdirectory inside thread workspace
 
+# Browser-realistic headers used for all outbound fetches.
+# A generic bot UA is immediately flagged by Cloudflare / WAF — use Chrome on Windows.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Cache-Control": "max-age=0",
+}
+
+# Fallback UA used on 403 retry (Firefox on macOS -- different fingerprint)
+_FALLBACK_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) "
+        "Gecko/20100101 Firefox/125.0"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+}
+
+# HTTP status codes that indicate the server is actively blocking bots.
+# On these we retry once with the fallback UA; if still blocked, report clearly.
+_BOT_BLOCKED_STATUSES = {403, 429, 406, 503}
+
 
 def _validate_url(raw: str) -> str | None:
     """Return error message on rejection, None on success."""
@@ -74,10 +113,23 @@ def _validate_url(raw: str) -> str | None:
 
 
 def _safe_content_type(ct: str) -> bool:
-    c = ct.lower()
-    if c.startswith(("text/html", "application/xhtml+xml", "application/json", "text/plain")):
+    """Return True only for content types that contain parseable text/HTML/JSON."""
+    c = ct.lower().split(";")[0].strip()  # strip charset/params
+    _SAFE_TYPES = {
+        "text/html",
+        "application/xhtml+xml",
+        "application/json",
+        "text/plain",
+        "text/xml",
+        "application/xml",
+        "application/atom+xml",
+        "application/rss+xml",
+        "application/ld+json",
+    }
+    if c in _SAFE_TYPES:
         return True
-    return "text/" in c or "application/" in c
+    # Allow any text/* subtype but NOT binary application/* like octet-stream, pdf, zip, etc.
+    return c.startswith("text/")
 
 
 def _extract_domain(url: str) -> str:
@@ -87,75 +139,71 @@ def _extract_domain(url: str) -> str:
         return "site"
 
 
+def _do_fetch(url: str, timeout: int, headers: dict, verify: bool = True) -> tuple[str | None, int | None, str | None]:
+    """Low-level fetch. Returns (body, status_code, error_message). Exactly one of body/error is set."""
+    try:
+        with httpx.Client(
+            follow_redirects=True,
+            max_redirects=_MAX_REDIRECTS,
+            headers=headers,
+            timeout=timeout,
+            verify=verify,
+        ) as client:
+            resp = client.get(url)
+            if resp.status_code >= 400:
+                return None, resp.status_code, f"HTTP {resp.status_code} from {resp.url}"
+            ct = resp.headers.get("content-type", "")
+            if not _safe_content_type(ct):
+                return None, resp.status_code, f"unsafe content-type '{ct}'"
+            n = len(resp.content)
+            body = resp.content[:_MAX_RESPONSE_BYTES].decode("utf-8", errors="replace") if n > _MAX_RESPONSE_BYTES else resp.text
+            return body, resp.status_code, None
+    except httpx.TooManyRedirects:
+        return None, None, f"too many redirects ({_MAX_REDIRECTS} max)"
+    except httpx.ReadTimeout:
+        return None, None, f"timed out after {timeout}s"
+    except httpx.RequestError as exc:
+        return None, None, str(exc)
+    except Exception as exc:
+        return None, None, str(exc)
+
+
 def _fetch_html(url: str, timeout: int) -> tuple[str | None, str | None]:
     """Fetch raw HTML from a URL. Returns (html_or_none, error_or_none).
 
-    Retries without SSL verification if the first attempt fails with SSL errors.
+    Strategy:
+    1. Try with Chrome browser headers (realistic UA reduces bot-detection blocks)
+    2. On SSL error → retry without cert verification
+    3. On bot-block status (403/429/406/503) → retry with Firefox UA
+    4. Still blocked → return actionable error message
     """
-    try:
-        client = httpx.Client(
-            follow_redirects=True,
-            max_redirects=_MAX_REDIRECTS,
-            headers={
-                "User-Agent": "Mozilla/5.0 (compatible; DeerFlow/1.0)",
-                "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-            },
-            timeout=timeout,
-        )
-        with client:
-            resp = client.get(url)
-            if resp.status_code >= 400:
-                return None, f"HTTP {resp.status_code} from {resp.url}"
-            ct = resp.headers.get("content-type", "")
-            if not _safe_content_type(ct):
-                return None, f"unsafe content-type '{ct}'"
-            n = len(resp.content)
-            body = resp.content[:_MAX_RESPONSE_BYTES].decode("utf-8", errors="replace") if n > _MAX_RESPONSE_BYTES else resp.text
-            return body, None
-    except httpx.TooManyRedirects:
-        return None, f"too many redirects ({_MAX_REDIRECTS} max)"
-    except httpx.ReadTimeout:
-        return None, f"timed out after {timeout}s"
-    except httpx.RequestError as exc:
-        if "SSL" in str(exc) or "CERTIFICATE" in str(exc).upper():
-            logger.warning("SSL verification failed for %s, retrying without verification", url)
-            return _fetch_html_no_verify(url, timeout)
-        return None, str(exc)
-    except Exception as exc:
-        return None, str(exc)
+    body, status, err = _do_fetch(url, timeout, _BROWSER_HEADERS, verify=True)
+
+    if err and ("SSL" in err or "CERTIFICATE" in err.upper()):
+        logger.warning("SSL error for %s, retrying without verification", url)
+        body, status, err = _do_fetch(url, timeout, _BROWSER_HEADERS, verify=False)
+
+    if err and status in _BOT_BLOCKED_STATUSES:
+        logger.info("HTTP %s for %s with Chrome UA, retrying with Firefox UA", status, url)
+        body, status, err = _do_fetch(url, timeout, _FALLBACK_HEADERS, verify=True)
+        if err and ("SSL" in err or "CERTIFICATE" in err.upper()):
+            body, status, err = _do_fetch(url, timeout, _FALLBACK_HEADERS, verify=False)
+
+    if err:
+        if status in _BOT_BLOCKED_STATUSES:
+            return None, (
+                f"HTTP {status} from {url}: the site is actively blocking automated access "
+                f"(bot protection / WAF). Try web_search to find cached or summarized content instead."
+            )
+        return None, err
+
+    return body, None
 
 
 def _fetch_html_no_verify(url: str, timeout: int) -> tuple[str | None, str | None]:
-    """Fetch raw HTML without SSL verification (fallback for broken CA chains)."""
-    try:
-        client = httpx.Client(
-            follow_redirects=True,
-            max_redirects=_MAX_REDIRECTS,
-            verify=False,
-            headers={
-                "User-Agent": "Mozilla/5.0 (compatible; DeerFlow/1.0)",
-                "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-            },
-            timeout=timeout,
-        )
-        with client:
-            resp = client.get(url)
-            if resp.status_code >= 400:
-                return None, f"HTTP {resp.status_code} from {resp.url}"
-            ct = resp.headers.get("content-type", "")
-            if not _safe_content_type(ct):
-                return None, f"unsafe content-type '{ct}'"
-            n = len(resp.content)
-            body = resp.content[:_MAX_RESPONSE_BYTES].decode("utf-8", errors="replace") if n > _MAX_RESPONSE_BYTES else resp.text
-            return body, None
-    except httpx.TooManyRedirects:
-        return None, f"too many redirects ({_MAX_REDIRECTS} max)"
-    except httpx.ReadTimeout:
-        return None, f"timed out after {timeout}s"
-    except httpx.RequestError as exc:
-        return None, str(exc)
-    except Exception as exc:
-        return None, str(exc)
+    """Kept for external callers; wraps _do_fetch without SSL verification."""
+    body, _status, err = _do_fetch(url, timeout, _BROWSER_HEADERS, verify=False)
+    return body, err
 
 
 def _html_to_md(html: str) -> str:
@@ -288,9 +336,11 @@ def web_fetch_tool(
     # 4. Fetch HTML
     html, fetch_err = _fetch_html(url, timeout)
     if fetch_err:
-        return f"Fetch error for {url}: {fetch_err}"
+        # Return the error directly -- _fetch_html already formats actionable messages
+        # for bot-blocked sites (403/429) with guidance to use web_search instead.
+        return fetch_err
     if not html or not html.strip():
-        return f"Error: Page returned no content: {url}"
+        return f"Error: Page returned no content for {url}. The page may require JavaScript or authentication."
 
     # 5. Convert to markdown (markitdown engine -- same pipeline as uploaded docs)
     try:

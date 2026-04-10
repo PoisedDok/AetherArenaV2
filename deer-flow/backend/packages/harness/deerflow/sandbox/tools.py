@@ -638,7 +638,10 @@ def read_file_tool(
             return "(empty)"
         if start_line is not None and end_line is not None:
             content = "\n".join(content.splitlines()[start_line - 1 : end_line])
-        return content
+            return content
+        from deerflow.utils.doc_summarizer import maybe_summarize
+
+        return maybe_summarize(content, source=requested_path, source_type="file")
     except SandboxError as e:
         return f"Error: {e}"
     except FileNotFoundError:

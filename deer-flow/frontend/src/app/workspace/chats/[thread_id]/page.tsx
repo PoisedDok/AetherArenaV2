@@ -99,22 +99,33 @@ export default function ChatPage() {
         <div className="relative flex size-full min-h-0 justify-between">
           <header
             className={cn(
-              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
+              "absolute top-0 right-0 left-0 z-30 flex shrink-0 flex-col",
               isNewThread
                 ? "bg-transparent backdrop-blur-none"
                 : "glass-header shadow-xs",
             )}
           >
-            <div className="flex w-full items-center text-sm font-medium">
-              <ThreadTitle threadId={threadId} thread={thread} />
-            </div>
-            
-            {/* Conditionally render right-side header actions ONLY if it's NOT a new thread */}
-            {!isNewThread && (
-              <div className="flex items-center">
-                <ExportTrigger threadId={threadId} />
-                <ArtifactTrigger />
+            <div className="flex h-12 items-center px-4">
+              <div className="flex w-full items-center text-sm font-medium">
+                <ThreadTitle threadId={threadId} thread={thread} />
               </div>
+
+              {/* Conditionally render right-side header actions ONLY if it's NOT a new thread */}
+              {!isNewThread && (
+                <div className="flex items-center">
+                  <ExportTrigger threadId={threadId} />
+                  <ArtifactTrigger />
+                </div>
+              )}
+            </div>
+
+            {/* Todos panel hanging below the title bar */}
+            {!isNewThread && (
+              <TodoList
+                todos={thread.values.todos ?? []}
+                hidden={!thread.values.todos || thread.values.todos.length === 0}
+                className="rounded-none border-x-0 border-t-0 border-b"
+              />
             )}
           </header>
           <main className="flex min-h-0 max-w-full grow flex-col">
@@ -136,13 +147,6 @@ export default function ChatPage() {
                     : "max-w-(--container-width-md)",
                 )}
               >
-                <TodoList
-                  className="translate-y-0 bg-background/5"
-                  todos={thread.values.todos ?? []}
-                  hidden={
-                    !thread.values.todos || thread.values.todos.length === 0
-                  }
-                />
                 <div className="relative">
                   {/* Conditionally render Guru only if it's NOT a new thread */}
                   {!isNewThread && (

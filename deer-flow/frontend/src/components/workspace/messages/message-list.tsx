@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import { CompactBoundary, isCompactBoundaryContent } from "./compact-boundary";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -55,6 +56,14 @@ export function MessageList({
         {groupMessages(messages, (group) => {
           if (group.type === "human" || group.type === "assistant") {
             return group.messages.map((msg) => {
+              if (group.type === "human" && isCompactBoundaryContent(msg.content)) {
+                return (
+                  <CompactBoundary
+                    key={`${group.id}/${msg.id}`}
+                    content={msg.content as string}
+                  />
+                );
+              }
               return (
                 <MessageListItem
                   key={`${group.id}/${msg.id}`}

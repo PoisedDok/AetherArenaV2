@@ -70,4 +70,7 @@ def web_fetch_tool(url: str) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
-    return f"# {title}\n\n{markdown_content[:4096]}"
+    raw = f"# {title}\n\n{markdown_content}"
+    from deerflow.utils.doc_summarizer import maybe_summarize
+
+    return maybe_summarize(raw, source=url, source_type="url")

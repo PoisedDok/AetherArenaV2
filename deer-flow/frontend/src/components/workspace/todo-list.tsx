@@ -39,14 +39,14 @@ export function TodoList({
   return (
     <div
       className={cn(
-        "flex h-fit w-full origin-bottom translate-y-4 flex-col overflow-hidden rounded-t-xl border border-b-0 bg-background backdrop-blur-sm transition-all duration-200 ease-out",
-        hidden ? "pointer-events-none translate-y-8 opacity-0" : "",
+        "flex h-fit w-full flex-col overflow-hidden backdrop-blur-2xl transition-all duration-200 ease-out",
+        hidden ? "pointer-events-none opacity-0" : "",
         className,
       )}
     >
       <header
         className={cn(
-          "bg-accent flex min-h-8 shrink-0 cursor-pointer items-center justify-between px-4 text-sm transition-all duration-300 ease-out",
+          "flex min-h-8 shrink-0 cursor-pointer items-center justify-between px-4 text-sm transition-all duration-300 ease-out",
         )}
         onClick={handleToggle}
       >
@@ -60,18 +60,18 @@ export function TodoList({
           <ChevronUpIcon
             className={cn(
               "text-muted-foreground size-4 transition-transform duration-300 ease-out",
-              collapsed ? "" : "rotate-180",
+              collapsed ? "rotate-180" : "",
             )}
           />
         </div>
       </header>
       <main
         className={cn(
-          "bg-accent flex grow px-2 transition-all duration-300 ease-out",
-          collapsed ? "h-0 pb-3" : "h-28 pb-4",
+          "flex grow px-2 transition-all duration-300 ease-out",
+          collapsed ? "h-0 pb-0" : "h-28 pb-4",
         )}
       >
-        <QueueList className="bg-background mt-0 w-full rounded-t-xl">
+        <QueueList className="bg-background/80 mt-0 w-full rounded-b-xl">
           {todos.map((todo, i) => (
             <QueueItem key={i + (todo.content ?? "")}>
               <div className="flex items-center gap-2">

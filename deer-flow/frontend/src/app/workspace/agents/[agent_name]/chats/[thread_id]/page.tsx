@@ -88,38 +88,49 @@ export default function AgentChatPage() {
         <div className="relative flex size-full min-h-0 justify-between">
           <header
             className={cn(
-              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center gap-2 px-4",
+              "absolute top-0 right-0 left-0 z-30 flex shrink-0 flex-col",
               isNewThread
                 ? "bg-background/0 backdrop-blur-none"
                 : "bg-background/80 shadow-xs backdrop-blur",
             )}
           >
-            {/* Agent badge */}
-            <div className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
-              <BotIcon className="text-primary h-3.5 w-3.5" />
-              <span className="text-xs font-medium">
-                {agent?.name ?? agent_name}
-              </span>
+            <div className="flex h-12 items-center gap-2 px-4">
+              {/* Agent badge */}
+              <div className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
+                <BotIcon className="text-primary h-3.5 w-3.5" />
+                <span className="text-xs font-medium">
+                  {agent?.name ?? agent_name}
+                </span>
+              </div>
+
+              <div className="flex w-full items-center text-sm font-medium">
+                <ThreadTitle threadId={threadId} thread={thread} />
+              </div>
+              <div className="mr-4 flex items-center">
+                <Tooltip content={t.agents.newChat}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      router.push(`/workspace/agents/${agent_name}/chats/new`);
+                    }}
+                  >
+                    <PlusSquare /> {t.agents.newChat}
+                  </Button>
+                </Tooltip>
+                <ExportTrigger threadId={threadId} />
+                <ArtifactTrigger />
+              </div>
             </div>
 
-            <div className="flex w-full items-center text-sm font-medium">
-              <ThreadTitle threadId={threadId} thread={thread} />
-            </div>
-            <div className="mr-4 flex items-center">
-              <Tooltip content={t.agents.newChat}>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    router.push(`/workspace/agents/${agent_name}/chats/new`);
-                  }}
-                >
-                  <PlusSquare /> {t.agents.newChat}
-                </Button>
-              </Tooltip>
-              <ExportTrigger threadId={threadId} />
-              <ArtifactTrigger />
-            </div>
+            {/* Todos panel hanging below the title bar */}
+            {!isNewThread && (
+              <TodoList
+                todos={thread.values.todos ?? []}
+                hidden={!thread.values.todos || thread.values.todos.length === 0}
+                className="rounded-none border-x-0 border-t-0 border-b"
+              />
+            )}
           </header>
 
           <main className="flex min-h-0 max-w-full grow flex-col">
@@ -142,14 +153,6 @@ export default function AgentChatPage() {
                     : "max-w-(--container-width-md)",
                 )}
               >
-                <TodoList
-                  className="translate-y-0 bg-background/5"
-                  todos={thread.values.todos ?? []}
-                  hidden={
-                    !thread.values.todos || thread.values.todos.length === 0
-                  }
-                />
-
                 <InputBox
                   className={cn("bg-background/5 w-full")}
                   isNewThread={isNewThread}

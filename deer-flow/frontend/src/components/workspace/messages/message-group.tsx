@@ -2,6 +2,7 @@ import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   FolderOpenIcon,
   GlobeIcon,
   ListTodoIcon,
@@ -177,6 +178,7 @@ function ToolCall({
     if (typeof args.query === "string") {
       label = t.toolCalls.searchOnWebFor(args.query);
     }
+    const searchResultText = !Array.isArray(result) ? toResultText(result) : null;
     return (
       <ChainOfThoughtStep key={id} label={label} icon={SearchIcon}>
         {Array.isArray(result) && (
@@ -190,6 +192,7 @@ function ToolCall({
             ))}
           </ChainOfThoughtSearchResults>
         )}
+        {searchResultText && <ToolOutput output={searchResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "image_search") {
@@ -197,21 +200,21 @@ function ToolCall({
     if (typeof args.query === "string") {
       label = t.toolCalls.searchForRelatedImagesFor(args.query);
     }
-    const results = (
-      result as {
-        results: {
-          source_url: string;
-          thumbnail_url: string;
-          image_url: string;
-          title: string;
-        }[];
-      }
-    )?.results;
+    const imageResultObj = result as {
+      results?: {
+        source_url: string;
+        thumbnail_url: string;
+        image_url: string;
+        title: string;
+      }[];
+    } | undefined;
+    const imageResults = imageResultObj?.results;
+    const imageResultText = !imageResults ? toResultText(result) : null;
     return (
       <ChainOfThoughtStep key={id} label={label} icon={SearchIcon}>
-        {Array.isArray(results) && results.length > 0 && (
+        {Array.isArray(imageResults) && imageResults.length > 0 && (
           <ChainOfThoughtSearchResults>
-            {results.map((item) => (
+            {imageResults.map((item) => (
               <Tooltip key={item.image_url || item.thumbnail_url} content={item.title}>
                 <a
                   className="block size-20 shrink-0 overflow-hidden rounded-md ring-1 ring-black/10 transition-opacity hover:opacity-80 dark:ring-white/10"
@@ -237,6 +240,7 @@ function ToolCall({
             ))}
           </ChainOfThoughtSearchResults>
         )}
+        {imageResultText && <ToolOutput output={imageResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "web_fetch") {
@@ -248,6 +252,7 @@ function ToolCall({
         title = potentialTitle;
       }
     }
+    const fetchResultText = toResultText(result);
     return (
       <ChainOfThoughtStep
         key={id}
@@ -265,6 +270,7 @@ function ToolCall({
             </a>
           )}
         </ChainOfThoughtSearchResult>
+        {fetchResultText && <ToolOutput output={fetchResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "ls") {
@@ -274,6 +280,7 @@ function ToolCall({
       description = t.toolCalls.listFolder;
     }
     const path: string | undefined = (args as { path: string })?.path;
+    const lsResultText = toResultText(result);
     return (
       <ChainOfThoughtStep key={id} label={description} icon={FolderOpenIcon}>
         {path && (
@@ -281,6 +288,7 @@ function ToolCall({
             {path}
           </ChainOfThoughtSearchResult>
         )}
+        {lsResultText && <ToolOutput output={lsResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "read_file") {
@@ -290,6 +298,7 @@ function ToolCall({
       description = t.toolCalls.readFile;
     }
     const { path } = args as { path: string; content: string };
+    const readResultText = toResultText(result);
     return (
       <ChainOfThoughtStep key={id} label={description} icon={BookOpenTextIcon}>
         {path && (
@@ -297,6 +306,7 @@ function ToolCall({
             {path}
           </ChainOfThoughtSearchResult>
         )}
+        {readResultText && <ToolOutput output={readResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "write_file" || name === "str_replace") {
@@ -319,6 +329,7 @@ function ToolCall({
       }, 100);
     }
 
+    const writeResultText = toResultText(result);
     return (
       <ChainOfThoughtStep
         key={id}
@@ -339,6 +350,7 @@ function ToolCall({
             {path}
           </ChainOfThoughtSearchResult>
         )}
+        {writeResultText && <ToolOutput output={writeResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "bash") {
@@ -348,7 +360,7 @@ function ToolCall({
       return t.toolCalls.executeCommand;
     }
     const command: string | undefined = (args as { command: string })?.command;
-    const hasResult = result !== undefined && result !== "";
+    const bashResultText = toResultText(result);
     return (
       <ChainOfThoughtStep key={id} label={description} icon={SquareTerminalIcon}>
         {command && (
@@ -359,50 +371,135 @@ function ToolCall({
             code={command}
           />
         )}
-        {hasResult && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-muted-foreground text-xs hover:text-foreground transition-colors">
-              Output
-            </summary>
-            <div className="mt-1 max-h-48 overflow-auto">
-              <CodeBlock
-                language="text"
-                code={typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-                showLineNumbers={false}
-                className="border-none px-0 text-xs"
-              />
-            </div>
-          </details>
-        )}
+        {bashResultText && <ToolOutput output={bashResultText} />}
       </ChainOfThoughtStep>
     );
   } else if (name === "ask_clarification") {
+    const clarificationResultText = toResultText(result);
     return (
       <ChainOfThoughtStep
         key={id}
         label={t.toolCalls.needYourHelp}
         icon={MessageCircleQuestionMarkIcon}
-      ></ChainOfThoughtStep>
+      >
+        {clarificationResultText && <ToolOutput output={clarificationResultText} />}
+      </ChainOfThoughtStep>
     );
   } else if (name === "write_todos") {
+    const todosResultText = toResultText(result);
     return (
       <ChainOfThoughtStep
         key={id}
         label={t.toolCalls.writeTodos}
         icon={ListTodoIcon}
-      ></ChainOfThoughtStep>
+      >
+        {todosResultText && <ToolOutput output={todosResultText} />}
+      </ChainOfThoughtStep>
     );
   } else {
     const description: string | undefined = (args as { description: string })
       ?.description;
+    const genericResultText = toResultText(result);
     return (
       <ChainOfThoughtStep
         key={id}
         label={description ?? t.toolCalls.useTool(name)}
         icon={WrenchIcon}
-      ></ChainOfThoughtStep>
+      >
+        {genericResultText && <ToolOutput output={genericResultText} />}
+      </ChainOfThoughtStep>
     );
   }
+}
+
+const TOOL_OUTPUT_COLLAPSE_THRESHOLD = 8; // lines before collapsing
+
+/** Normalise any tool result to a display string. Returns null if empty. */
+function toResultText(result: string | Record<string, unknown> | undefined): string | null {
+  if (result === undefined || result === "") return null;
+  const raw = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  const lines = raw.split("\n");
+  while (lines.length > 0 && lines[lines.length - 1]?.trim() === "") lines.pop();
+  return lines.join("\n") || null;
+}
+
+/**
+ * Premium inline tool output block.
+ * - Always shows for short output (≤ threshold lines)
+ * - For longer output: collapsed by default with animated expand/collapse toggle
+ */
+function ToolOutput({ output }: { output: string }) {
+  const lines = output.split("\n");
+  const isLong = lines.length > TOOL_OUTPUT_COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mt-2 overflow-hidden rounded-md border border-border/35 bg-muted/25">
+      {/* Header bar */}
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-border/25 px-3 py-1",
+          isLong && "cursor-pointer select-none hover:bg-muted/40 transition-colors",
+        )}
+        onClick={isLong ? () => setExpanded((v) => !v) : undefined}
+      >
+        <div className="flex items-center gap-1.5">
+          <div className="size-1.5 rounded-full bg-emerald-500/80" />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            output
+          </span>
+          {isLong && (
+            <span className="text-[10px] text-muted-foreground/40">
+              · {lines.length} lines
+            </span>
+          )}
+        </div>
+        {isLong && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
+            {expanded ? (
+              <>
+                <span>collapse</span>
+                <ChevronUpIcon className="size-3" />
+              </>
+            ) : (
+              <>
+                <span>expand</span>
+                <ChevronDownIcon className="size-3" />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Output body */}
+      {isLong ? (
+        expanded ? (
+          <div className="max-h-96 overflow-auto px-3 py-2">
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground/75">
+              {output}
+            </pre>
+          </div>
+        ) : (
+          /* Collapsed preview — first few lines with a fade */
+          <div
+            className="relative cursor-pointer px-3 pt-2 pb-1"
+            onClick={() => setExpanded(true)}
+          >
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground/75 line-clamp-4">
+              {lines.slice(0, 4).join("\n")}
+            </pre>
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-muted/60 to-transparent" />
+          </div>
+        )
+      ) : (
+        <div className="px-3 py-2">
+          <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground/75">
+            {output}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function convertToSteps(messages: Message[]): CoTStep[] {

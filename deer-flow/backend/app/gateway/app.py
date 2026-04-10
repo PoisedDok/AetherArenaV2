@@ -9,6 +9,7 @@ from app.gateway.routers import (
     agents,
     artifacts,
     channels,
+    compact,
     guru,
     mcp,
     memory,
@@ -183,6 +184,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
+
+    # Compact API is mounted at /api/threads/{thread_id}/compact
+    app.include_router(compact.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

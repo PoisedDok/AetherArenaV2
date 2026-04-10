@@ -96,6 +96,7 @@ import {
 } from "../ai-elements/model-selector";
 import { Suggestion, Suggestions } from "../ai-elements/suggestion";
 
+import { CompactButton } from "./compact-button";
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 
@@ -394,11 +395,14 @@ export function InputBox({
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (status === "streaming") {
-        // Queue the message and let the current stream finish naturally.
-        // sendMessage detects sendInFlightRef=true and enqueues. onFinish then
-        // drains the queue automatically — no stop needed, no interruption.
         if (message.text?.trim()) {
+          // Non-empty submit while streaming → queue the message.
+          // sendMessage detects sendInFlightRef=true and enqueues. onFinish then
+          // drains the queue automatically — no stop needed, no interruption.
           onSubmit?.(message);
+        } else {
+          // Empty submit while streaming = stop button click.
+          onStop?.();
         }
         return;
       }
@@ -905,6 +909,14 @@ export function InputBox({
           )}
         </PromptInputTools>
         <PromptInputTools>
+          {!isNewThread && (
+            <CompactButton
+              threadId={threadId}
+              messages={thread.messages}
+              modelName={typeof context.model_name === "string" ? context.model_name : undefined}
+              disabled={disabled || status === "streaming"}
+            />
+          )}
           <ModelSelector
             open={modelDialogOpen}
             onOpenChange={setModelDialogOpen}

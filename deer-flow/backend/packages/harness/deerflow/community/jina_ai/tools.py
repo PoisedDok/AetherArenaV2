@@ -25,4 +25,7 @@ def web_fetch_tool(url: str) -> str:
         timeout = config.model_extra.get("timeout")
     html_content = jina_client.crawl(url, return_format="html", timeout=timeout)
     article = readability_extractor.extract_article(html_content)
-    return article.to_markdown()[:4096]
+    content = article.to_markdown()
+    from deerflow.utils.doc_summarizer import maybe_summarize
+
+    return maybe_summarize(content, source=url, source_type="url")
