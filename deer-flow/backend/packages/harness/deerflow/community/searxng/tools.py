@@ -49,12 +49,11 @@ _BROWSER_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    # Omit Accept-Encoding to let httpx handle it automatically (avoids brotli decode errors
+    # when the brotli package is not installed). Also omit Sec-Fetch-* headers — CDNs like
+    # Wikimedia/Cloudflare use these as bot signals when combined with a non-browser TLS fingerprint.
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
     "Cache-Control": "max-age=0",
 }
 
@@ -66,12 +65,8 @@ _FALLBACK_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
 }
 
 # HTTP status codes that indicate the server is actively blocking bots.
@@ -264,7 +259,7 @@ def web_search_tool(query: str) -> str:
     try:
         resp = httpx.get(
             f"{_get_searxng_url().rstrip('/')}/search",
-            params={"q": query, "format": "json"},
+            params={"q": query, "format": "json", "language": "en"},
             timeout=15.0,
         )
         resp.raise_for_status()

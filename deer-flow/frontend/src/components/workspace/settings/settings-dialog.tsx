@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArchiveIcon,
   BellIcon,
   BrainIcon,
   CpuIcon,
@@ -20,6 +21,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AboutSettingsPage } from "@/components/workspace/settings/about-settings-page";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
+import { CompactSettingsPage } from "@/components/workspace/settings/compact-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelsSettingsPage } from "@/components/workspace/settings/models-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
@@ -31,6 +33,7 @@ import { cn } from "@/lib/utils";
 export type SettingsDialogSectionId =
   | "appearance"
   | "memory"
+  | "compact"
   | "tools"
   | "models"
   | "skills"
@@ -71,6 +74,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
         id: "memory",
         label: t.settings.sections.memory,
         icon: BrainIcon,
+      },
+      {
+        id: "compact",
+        label: t.settings.sections.compact,
+        icon: ArchiveIcon,
       },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "models", label: t.settings.sections.models, icon: CpuIcon },
@@ -133,6 +141,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <div className="space-y-8 p-6">
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
+              {activeSection === "compact" && <CompactSettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
               {activeSection === "models" && <ModelsSettingsPage />}
               {activeSection === "skills" && (

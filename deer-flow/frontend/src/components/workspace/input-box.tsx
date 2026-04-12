@@ -914,7 +914,7 @@ export function InputBox({
               threadId={threadId}
               messages={thread.messages}
               modelName={typeof context.model_name === "string" ? context.model_name : undefined}
-              disabled={disabled || status === "streaming"}
+              disabled={disabled ?? status === "streaming"}
             />
           )}
           <ModelSelector

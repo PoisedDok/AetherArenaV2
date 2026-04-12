@@ -185,8 +185,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
 
-    # Compact API is mounted at /api/threads/{thread_id}/compact
+    # Compact API — thread-scoped operations and config
     app.include_router(compact.router)
+    app.include_router(compact.config_router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

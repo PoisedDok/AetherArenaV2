@@ -7,14 +7,18 @@ builds the post-compact message list:
 PTL (Prompt-Too-Long) retry loop: if the compact model call fails because
 the messages are too long, we drop the oldest API-round groups and retry
 (up to MAX_PTL_RETRIES times).
+
+compact_conversation_stream() is the streaming variant — yields SSE-style
+dicts so the Gateway endpoint can stream tokens live to the frontend.
 """
 
 import logging
+from collections.abc import Generator
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from deerflow.compact.prompts import build_compact_prompt, extract_summary_from_response
-from deerflow.compact.types import CompactBoundaryMessage, CompactTrigger, CompactionResult
+from deerflow.compact.types import CompactBoundaryMessage, CompactionResult, CompactTrigger
 from deerflow.utils.doc_summarizer import estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -25,8 +29,24 @@ PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]"
 DEFAULT_MESSAGES_TO_KEEP = 10
 
 
+import re as _re
+
+_SPECIAL_TOKEN_RE = _re.compile(r"<\|[^|>]{1,40}\|>")
+
+
+def _sanitize_content(text: str) -> str:
+    """Remove model-specific special tokens (e.g. Mistral <|END_TOOL_REQUEST|>).
+
+    When these tokens appear verbatim in message content and are fed back into
+    the same model family (e.g. LMStudio Ministral), the tokenizer interprets
+    them as real control tokens — causing the model to output EOS immediately
+    and produce an empty response.
+    """
+    return _SPECIAL_TOKEN_RE.sub("", text)
+
+
 def _strip_images_from_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """Replace image/document content blocks with text markers to reduce tokens."""
+    """Replace image/document blocks with markers and strip model special tokens."""
     result = []
     for msg in messages:
         if isinstance(msg.content, list):
@@ -34,9 +54,18 @@ def _strip_images_from_messages(messages: list[BaseMessage]) -> list[BaseMessage
             for block in msg.content:
                 if isinstance(block, dict) and block.get("type") in ("image_url", "image", "document"):
                     new_content.append({"type": "text", "text": f"[{block.get('type', 'media')} content removed for summarization]"})
+                elif isinstance(block, dict) and block.get("type") == "text":
+                    sanitized = _sanitize_content(block.get("text", ""))
+                    new_content.append({**block, "text": sanitized})
                 else:
                     new_content.append(block)
             result.append(msg.model_copy(update={"content": new_content}))
+        elif isinstance(msg.content, str):
+            sanitized = _sanitize_content(msg.content)
+            if sanitized != msg.content:
+                result.append(msg.model_copy(update={"content": sanitized}))
+            else:
+                result.append(msg)
         else:
             result.append(msg)
     return result
@@ -98,27 +127,19 @@ def _truncate_head_for_ptl_retry(messages: list[BaseMessage], fraction_to_drop: 
 def _call_compact_model(messages_to_summarize: list[BaseMessage], model_name: str | None, custom_instructions: str | None) -> str:
     """Call the LLM to generate a compact summary.
 
+    Uses the same model resolution logic as the lead agent so the compact call
+    goes to whichever model/provider the user has selected in the chat.
+
     Returns the raw response text. Raises on API error.
     """
+    from deerflow.agents.lead_agent.agent import _resolve_model_name
     from deerflow.models import create_chat_model
 
-    # Use config compact model if no explicit model_name provided
-    effective_model = model_name
-    if not effective_model:
-        try:
-            from deerflow.config.compact_config import get_compact_config
-            cfg = get_compact_config()
-            if cfg.model_name:
-                effective_model = cfg.model_name
-        except Exception:
-            pass
-
+    effective_model = _resolve_model_name(model_name)
     model = create_chat_model(name=effective_model, thinking_enabled=False)
     prompt = build_compact_prompt(custom_instructions)
 
-    # Build input: system prompt + messages to summarize
     input_messages: list[BaseMessage] = [SystemMessage(content=prompt)] + messages_to_summarize
-
     response = model.invoke(input_messages)
     if isinstance(response.content, str):
         return response.content
@@ -126,6 +147,143 @@ def _call_compact_model(messages_to_summarize: list[BaseMessage], model_name: st
         parts = [b.get("text", "") if isinstance(b, dict) else str(b) for b in response.content]
         return "\n".join(p for p in parts if p)
     return str(response.content)
+
+
+def _stream_compact_model(
+    messages_to_summarize: list[BaseMessage],
+    model_name: str | None,
+    custom_instructions: str | None,
+) -> Generator[str, None, None]:
+    """Stream text tokens from the compact LLM.  Yields raw text chunks."""
+    from deerflow.agents.lead_agent.agent import _resolve_model_name
+    from deerflow.models import create_chat_model
+
+    effective_model = _resolve_model_name(model_name)
+    logger.info("compact stream: using model=%s", effective_model)
+    model = create_chat_model(name=effective_model, thinking_enabled=False)
+    prompt = build_compact_prompt(custom_instructions)
+
+    input_messages: list[BaseMessage] = [SystemMessage(content=prompt)] + messages_to_summarize
+    for chunk in model.stream(input_messages):
+        if isinstance(chunk.content, str) and chunk.content:
+            yield chunk.content
+        elif isinstance(chunk.content, list):
+            for block in chunk.content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    if text:
+                        yield text
+
+
+def compact_conversation_stream(
+    messages: list[BaseMessage],
+    model_name: str | None = None,
+    custom_instructions: str | None = None,
+    messages_to_keep: int = DEFAULT_MESSAGES_TO_KEEP,
+    trigger: CompactTrigger = CompactTrigger.MANUAL,
+) -> Generator[dict, None, None]:
+    """Streaming version of compact_conversation.
+
+    Yields dicts with types:
+    - {"type": "start", "pre_tokens": N, "message_count": N, "summarized_count": N}
+    - {"type": "token", "text": "..."}   — live LLM output tokens
+    - {"type": "done",  "summary": "...", "pre_tokens": N, "post_tokens": N, "summarized_count": N}
+    - {"type": "error", "message": "..."}
+    """
+    if not messages:
+        yield {"type": "error", "message": "No messages to compact."}
+        return
+    if len(messages) < 2:
+        yield {"type": "error", "message": f"Not enough messages to compact (have {len(messages)}, need at least 2)."}
+        return
+
+    # Pre-token count
+    try:
+        import tiktoken
+        _enc = tiktoken.get_encoding("cl100k_base")
+        pre_tokens = len(_enc.encode("\n".join(m.content if isinstance(m.content, str) else str(m.content) for m in messages)))
+    except Exception:
+        pre_tokens = sum(estimate_tokens(m.content if isinstance(m.content, str) else str(m.content)) for m in messages)
+
+    # How many messages will actually be summarized (not kept verbatim).
+    # If messages_to_keep >= total, we still summarize all-but-one (the most recent).
+    if messages_to_keep >= len(messages):
+        messages_to_summarize = messages[:-1] if len(messages) > 1 else []
+        kept_count = 1
+    else:
+        messages_to_summarize = messages[:-messages_to_keep]
+        kept_count = messages_to_keep
+    summarized_count = len(messages) - kept_count
+
+    logger.info(
+        "compact stream: starting thread compact pre_tokens=%d msg_count=%d to_summarize=%d to_keep=%d trigger=%s",
+        pre_tokens, len(messages), len(messages_to_summarize), kept_count, trigger.value,
+    )
+    yield {"type": "start", "pre_tokens": pre_tokens, "message_count": len(messages), "summarized_count": summarized_count}
+    stripped = _strip_images_from_messages(messages_to_summarize)
+
+    # Stream LLM tokens with PTL retry support
+    full_text = ""
+    last_error: str | None = None
+
+    for attempt in range(MAX_PTL_RETRIES + 1):
+        try:
+            for token in _stream_compact_model(stripped, model_name, custom_instructions):
+                full_text += token
+                yield {"type": "token", "text": token}
+            break  # success
+        except Exception as e:
+            error_str = str(e).lower()
+            is_ptl = "prompt" in error_str and any(k in error_str for k in ("too long", "too large", "context", "maximum"))
+            if is_ptl and attempt < MAX_PTL_RETRIES:
+                logger.warning("compact stream: PTL error attempt %d/%d: %s — truncating and retrying", attempt + 1, MAX_PTL_RETRIES, e)
+                truncated = _truncate_head_for_ptl_retry(stripped)
+                if truncated is None:
+                    last_error = f"Cannot truncate further. Original error: {e}"
+                    break
+                stripped = truncated
+                full_text = ""  # reset for retry
+                continue
+            else:
+                last_error = str(e)
+                break
+
+    if last_error and not full_text.strip():
+        logger.error("compact stream: LLM failed: %s", last_error)
+        yield {"type": "error", "message": f"LLM failed: {last_error}"}
+        return
+
+    if not full_text.strip():
+        yield {"type": "error", "message": "LLM returned empty response."}
+        return
+
+    summary = extract_summary_from_response(full_text)
+    if not summary:
+        summary = full_text.strip()  # use raw response as fallback
+
+    # Post-token estimate — use kept_count computed above (handles the
+    # messages_to_keep >= len(messages) edge case correctly).
+    kept_messages = messages[-kept_count:] if kept_count > 0 else []
+    post_tokens = estimate_tokens(summary)
+    for m in kept_messages:
+        post_tokens += estimate_tokens(m.content if isinstance(m.content, str) else str(m.content))
+
+    logger.info(
+        "compact stream: done pre_tokens=%d summary_tokens=%d kept_count=%d kept_tokens=%d post_tokens=%d saved=%d",
+        pre_tokens,
+        estimate_tokens(summary),
+        len(kept_messages),
+        sum(estimate_tokens(m.content if isinstance(m.content, str) else str(m.content)) for m in kept_messages),
+        post_tokens,
+        pre_tokens - post_tokens,
+    )
+    yield {
+        "type": "done",
+        "summary": summary,
+        "pre_tokens": pre_tokens,
+        "post_tokens": post_tokens,
+        "summarized_count": summarized_count,
+    }
 
 
 def compact_conversation(
@@ -166,14 +324,20 @@ def compact_conversation(
     pre_message_count = len(messages)
 
     # Split: summarize the older portion, keep recent messages verbatim
-    if len(messages) <= messages_to_keep:
+    # Need at least 2 messages total to have something to compact
+    MIN_MESSAGES_FOR_COMPACT = 2
+    if len(messages) < MIN_MESSAGES_FOR_COMPACT:
         return CompactionResult(
             success=False,
             trigger=trigger,
-            error=f"Not enough messages to compact (have {len(messages)}, need more than {messages_to_keep}).",
+            error=f"Not enough messages to compact (have {len(messages)}, need at least {MIN_MESSAGES_FOR_COMPACT}).",
         )
 
-    messages_to_summarize = messages[:-messages_to_keep] if messages_to_keep > 0 else messages
+    # If messages_to_keep >= total messages, nothing to summarize
+    if messages_to_keep >= len(messages):
+        messages_to_summarize = messages[:-1] if len(messages) > 1 else []
+    else:
+        messages_to_summarize = messages[:-messages_to_keep]
     stripped = _strip_images_from_messages(messages_to_summarize)
 
     # PTL retry loop

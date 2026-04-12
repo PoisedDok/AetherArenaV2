@@ -72,12 +72,7 @@ services:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
     container_name: deer-flow-frontend
     environment:
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       # BETTER_AUTH_URL — set by deploy.sh to http://localhost:PORT dynamically
-      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:2026}
-      # Single-user login credentials — set these in your .env
-      - APP_USERNAME=${APP_USERNAME:-admin}
-      - APP_PASSWORD=${APP_PASSWORD}
       # BETTER_AUTH_TRUSTED_ORIGINS is set via env_file (frontend/.env) — do not override here
       # Browser must reach APIs via the published URL (nginx :2026), not gateway:8001
       # (unpublished). Leave NEXT_PUBLIC_BACKEND_BASE_URL unset in ../frontend/.env
@@ -85,6 +80,7 @@ services:
       - SEARXNG_INTERNAL_URL=http://searxng:8080
       - INTERNAL_BACKEND_BASE_URL=http://gateway:8001
     env_file:
+      - ../.env
       - ../frontend/.env
     networks:
       - deer-flow

@@ -123,11 +123,8 @@ services:
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
       - CI=true
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:2026}
-      - APP_USERNAME=${APP_USERNAME:-admin}
-      - APP_PASSWORD=${APP_PASSWORD}
     env_file:
+      - ../.env
       - ../frontend/.env
     # Avoid Docker embedded DNS failing to resolve public hosts (scrape_url / fetch).
     dns:

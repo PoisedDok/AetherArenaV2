@@ -1,19 +1,29 @@
 "use client";
 
 /**
- * CompactButton — Claude Code–style context ring with compact menu.
+ * CompactButton — context-usage ring + compact dropdown.
  *
- * Shows a thin circular arc (SVG) filled proportionally to % context used.
- * Color transitions: neutral → amber → orange → red as usage grows.
- * On click: dropdown with context stats + manual compact options.
+ * Clicking "Compact now" or "Compact with instructions":
+ *  1. Updates CompactContext state → CompactingCard appears in the message list.
+ *  2. Opens an SSE stream to POST /api/threads/{id}/compact/stream.
+ *  3. Tokens from the LLM are streamed into CompactContext.streamedText.
+ *  4. On "done" event: CompactingCard shows token savings and auto-dismisses
+ *     after router.refresh() pulls the updated thread state (compact boundary
+ *     now sits at the top of the same thread — no navigation required).
+ *  5. On "error" or abort: CompactingCard shows the error.
+ *
+ * Any message typed while compact is in progress is handled by the existing
+ * queue system (sendInFlightRef gate in hooks.ts).
  */
 
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArchiveIcon, ChevronDownIcon, ScissorsIcon } from "lucide-react";
+import { ArchiveIcon, ScissorsIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
 
+import { useCompactContext } from "@/core/compact/context";
 import { getBackendBaseURL } from "@/core/config";
+import { setThreadParent } from "@/core/threads/chain";
 import { cn } from "@/lib/utils";
 
 import {
@@ -26,9 +36,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-// ── Token estimation (rough, client-side) ────────────────────────────────────
+// ── Token estimation ──────────────────────────────────────────────────────────
 
-/** Estimate tokens from character count. ~4 chars/token on average. */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -41,18 +50,15 @@ function countMessageTokens(messages: Message[]): number {
       total += estimateTokens(content);
     } else if (Array.isArray(content)) {
       for (const block of content) {
-        if (typeof block === "string") {
-          total += estimateTokens(block);
-        } else if (block && typeof block === "object" && "text" in block && typeof block.text === "string") {
+        if (typeof block === "string") total += estimateTokens(block);
+        else if (block && typeof block === "object" && "text" in block && typeof block.text === "string")
           total += estimateTokens(block.text);
-        }
       }
     }
   }
   return total;
 }
 
-// Context windows for common models — must match backend auto_compact.py
 const KNOWN_CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-4o": 128_000,
   "gpt-4o-mini": 128_000,
@@ -70,57 +76,49 @@ const KNOWN_CONTEXT_WINDOWS: Record<string, number> = {
   "deepseek-chat": 64_000,
   "deepseek-reasoner": 64_000,
 };
-
 const DEFAULT_CONTEXT_WINDOW = 32_000;
 
 function getContextWindow(modelName: string | undefined): number {
   if (!modelName) return DEFAULT_CONTEXT_WINDOW;
   const lower = modelName.toLowerCase();
-  for (const [key, window] of Object.entries(KNOWN_CONTEXT_WINDOWS)) {
-    if (lower.includes(key)) return window;
+  for (const [key, win] of Object.entries(KNOWN_CONTEXT_WINDOWS)) {
+    if (lower.includes(key)) return win;
   }
   return DEFAULT_CONTEXT_WINDOW;
 }
 
 // ── Arc ring SVG ──────────────────────────────────────────────────────────────
 
-interface ContextRingProps {
-  /** 0–1 fraction of context used */
+function ContextRing({
+  fraction,
+  size = 18,
+  strokeWidth = 2.5,
+}: {
   fraction: number;
-  /** Size in px (width = height) */
   size?: number;
-  /** Stroke width */
   strokeWidth?: number;
-}
-
-function ContextRing({ fraction, size = 18, strokeWidth = 2.5 }: ContextRingProps) {
+}) {
   const clamped = Math.min(1, Math.max(0, fraction));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  // Arc starts at top (−90°) and goes clockwise
   const dashOffset = circumference * (1 - clamped);
-
-  // Color: neutral below 60%, amber 60–80%, orange 80–90%, red 90%+
   const color =
     clamped >= 0.9
-      ? "#ef4444" // red-500
+      ? "#ef4444"
       : clamped >= 0.8
-        ? "#f97316" // orange-500
+        ? "#f97316"
         : clamped >= 0.6
-          ? "#f59e0b" // amber-500
+          ? "#f59e0b"
           : "currentColor";
-
-  const isHighUsage = clamped >= 0.8;
 
   return (
     <svg
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className={cn("shrink-0", isHighUsage && "drop-shadow-[0_0_4px_rgba(249,115,22,0.5)]")}
+      className={cn("shrink-0", clamped >= 0.8 && "drop-shadow-[0_0_4px_rgba(249,115,22,0.5)]")}
       aria-hidden="true"
     >
-      {/* Track ring */}
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -130,7 +128,6 @@ function ContextRing({ fraction, size = 18, strokeWidth = 2.5 }: ContextRingProp
         strokeOpacity={0.15}
         strokeWidth={strokeWidth}
       />
-      {/* Filled arc */}
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -142,12 +139,27 @@ function ContextRing({ fraction, size = 18, strokeWidth = 2.5 }: ContextRingProp
         strokeDasharray={circumference}
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
-        // Start from top (12 o'clock)
         transform={`rotate(-90, ${size / 2}, ${size / 2})`}
         style={{ transition: "stroke-dashoffset 0.4s ease, stroke 0.3s ease" }}
       />
     </svg>
   );
+}
+
+// ── SSE event shapes from /compact/stream ─────────────────────────────────────
+
+interface CompactSSEEvent {
+  type: "start" | "token" | "done" | "error";
+  text?: string;
+  pre_tokens?: number;
+  post_tokens?: number;
+  summarized_count?: number;
+  message_count?: number;
+  summary?: string;
+  method?: string;
+  message?: string;
+  /** New thread created by the backend to hold the compact state. Frontend navigates here. */
+  new_thread_id?: string;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -160,9 +172,11 @@ export interface CompactButtonProps {
 }
 
 export function CompactButton({ threadId, messages, modelName, disabled }: CompactButtonProps) {
-  const [isCompacting, setIsCompacting] = useState(false);
+  const { state, setState, abortRef } = useCompactContext();
+  const router = useRouter();
   const [customInstructions, setCustomInstructions] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const contextWindow = useMemo(() => getContextWindow(modelName), [modelName]);
   const tokenCount = useMemo(() => countMessageTokens(messages), [messages]);
@@ -172,57 +186,162 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
   const isWarning = fraction >= 0.6;
   const isHigh = fraction >= 0.8;
   const isCritical = fraction >= 0.9;
+  const isCompacting = state.status !== "idle";
 
   const triggerCompact = useCallback(
     async (instructions?: string) => {
       if (isCompacting) return;
-      setIsCompacting(true);
+      setDropdownOpen(false);
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      setState({
+        status: "starting",
+        streamedText: "",
+        preTokens: 0,
+        postTokens: 0,
+        summarizedCount: 0,
+        method: "llm",
+        errorMessage: null,
+      });
+
+      console.log(`[compact] triggerCompact: threadId=${threadId} modelName=${modelName ?? "auto"} instructions=${instructions ?? "none"}`);
       try {
-        const res = await fetch(`${getBackendBaseURL()}/api/threads/${threadId}/compact`, {
+        const res = await fetch(`${getBackendBaseURL()}/api/threads/${threadId}/compact/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ custom_instructions: instructions ?? undefined }),
+          body: JSON.stringify({
+            model_name: modelName ?? undefined,
+            custom_instructions: instructions ?? undefined,
+          }),
+          signal: abort.signal,
         });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: "Compact failed" }));
-          toast.error(err.detail ?? "Compact failed");
+
+        if (!res.ok || !res.body) {
+          const errText = await res.text().catch(() => `HTTP ${res.status}`);
+          setState((prev) => ({ ...prev, status: "error", errorMessage: errText }));
           return;
         }
-        const data = (await res.json()) as { pre_tokens?: number; post_tokens?: number; summary?: string };
-        const saved = (data.pre_tokens ?? 0) - (data.post_tokens ?? 0);
-        toast.success(`Context compacted — saved ~${saved.toLocaleString()} tokens`);
-        setShowCustomInput(false);
-        setCustomInstructions("");
-      } catch {
-        toast.error("Compact request failed. Is the backend running?");
-      } finally {
-        setIsCompacting(false);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (!payload) continue;
+
+            let event: CompactSSEEvent;
+            try {
+              event = JSON.parse(payload) as CompactSSEEvent;
+            } catch {
+              continue;
+            }
+
+            if (event.type === "start") {
+              console.log(`[compact] started — pre_tokens=${event.pre_tokens ?? 0} summarized_count=${event.summarized_count ?? 0}`);
+              setState((prev) => ({
+                ...prev,
+                status: "streaming",
+                preTokens: event.pre_tokens ?? 0,
+                summarizedCount: event.summarized_count ?? 0,
+              }));
+            } else if (event.type === "token") {
+              setState((prev) => ({
+                ...prev,
+                streamedText: prev.streamedText + (event.text ?? ""),
+              }));
+            } else if (event.type === "done") {
+              const newThreadId = event.new_thread_id;
+              console.log(`[compact] stream done — post_tokens=${event.post_tokens ?? 0} summarized_count=${event.summarized_count ?? 0} method=${event.method ?? "llm"} summary_length=${(event.summary ?? "").length} new_thread_id=${newThreadId ?? "none"}`);
+
+              // Persist the compact chain entry so CompactBoundary can show the
+              // summary and parent link on the new thread.
+              if (newThreadId) {
+                setThreadParent(newThreadId, {
+                  parent_id: threadId,
+                  summary: event.summary ?? "",
+                  method: event.method ?? "llm",
+                  pre_tokens: event.pre_tokens ?? 0,
+                  post_tokens: event.post_tokens ?? 0,
+                  summarized_count: event.summarized_count ?? 0,
+                  compacted_at: new Date().toISOString(),
+                });
+              }
+
+              setState((prev) => ({
+                ...prev,
+                status: "done",
+                postTokens: event.post_tokens ?? 0,
+                summarizedCount: event.summarized_count ?? prev.summarizedCount,
+                method: event.method ?? "llm",
+              }));
+              setShowCustomInput(false);
+              setCustomInstructions("");
+
+              // Navigate to the new thread after a brief pause so the user sees
+              // the "Context compacted" card before being redirected.
+              if (newThreadId) {
+                setTimeout(() => {
+                  console.log("[compact] navigating to new thread:", newThreadId);
+                  router.push(`/workspace/chats/${newThreadId}`);
+                }, 1200);
+              }
+            } else if (event.type === "error") {
+              console.error("[compact] stream error:", event.message);
+              setState((prev) => ({
+                ...prev,
+                status: "error",
+                errorMessage: event.message ?? "Compact failed.",
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          // Already set to "cancelled" by the cancel button handler
+        } else {
+          setState((prev) => ({
+            ...prev,
+            status: "error",
+            errorMessage: err instanceof Error ? err.message : "Compact request failed.",
+          }));
+        }
       }
     },
-    [threadId, isCompacting],
+    [isCompacting, modelName, threadId, setState, abortRef, router],
   );
 
-  const handleCompact = useCallback(() => triggerCompact(), [triggerCompact]);
+  const handleCompact = useCallback(() => void triggerCompact(), [triggerCompact]);
   const handleCompactWithInstructions = useCallback(
-    () => triggerCompact(customInstructions || undefined),
+    () => void triggerCompact(customInstructions || undefined),
     [triggerCompact, customInstructions],
   );
 
-  const ringColor =
-    isCritical
-      ? "text-red-500"
-      : isHigh
-        ? "text-orange-500"
-        : isWarning
-          ? "text-amber-500"
-          : "text-muted-foreground";
+  const ringColor = isCritical
+    ? "text-red-500"
+    : isHigh
+      ? "text-orange-500"
+      : isWarning
+        ? "text-amber-500"
+        : "text-muted-foreground";
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          disabled={disabled || isCompacting}
+          disabled={disabled ?? isCompacting}
           className={cn(
             "focus-visible:ring-ring inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs transition-colors",
             "hover:bg-accent hover:text-accent-foreground focus-visible:ring-1 focus-visible:outline-none",
@@ -237,7 +356,6 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-72">
-        {/* Header: context stats */}
         <DropdownMenuLabel className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <span className="text-foreground text-sm font-semibold">Context Usage</span>
@@ -257,12 +375,17 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
             </span>
           </div>
 
-          {/* Progress bar */}
           <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-500",
-                isCritical ? "bg-red-500" : isHigh ? "bg-orange-500" : isWarning ? "bg-amber-500" : "bg-primary",
+                isCritical
+                  ? "bg-red-500"
+                  : isHigh
+                    ? "bg-orange-500"
+                    : isWarning
+                      ? "bg-amber-500"
+                      : "bg-primary",
               )}
               style={{ width: `${pct}%` }}
             />
@@ -295,8 +418,10 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
           >
             <ScissorsIcon className="size-4 shrink-0" />
             <div className="flex flex-col">
-              <span className="font-medium">{isCompacting ? "Compacting…" : "Compact now"}</span>
-              <span className="text-muted-foreground text-[11px]">Summarize older messages, keep recent ones</span>
+              <span className="font-medium">Compact now</span>
+              <span className="text-muted-foreground text-[11px]">
+                Summarise older messages, continue in same session
+              </span>
             </div>
           </DropdownMenuItem>
 
@@ -327,7 +452,7 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
-                    void handleCompactWithInstructions();
+                    handleCompactWithInstructions();
                   }
                 }}
               />
@@ -335,9 +460,9 @@ export function CompactButton({ threadId, messages, modelName, disabled }: Compa
                 type="button"
                 className="bg-primary text-primary-foreground hover:bg-primary/90 mt-1 w-full rounded-md px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50"
                 disabled={isCompacting}
-                onClick={() => void handleCompactWithInstructions()}
+                onClick={handleCompactWithInstructions}
               >
-                {isCompacting ? "Compacting…" : "Compact"}
+                Compact
               </button>
             </div>
           )}

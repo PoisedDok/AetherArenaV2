@@ -14,9 +14,18 @@ class DocSummarizationConfig(BaseModel):
         default=2000,
         description="Token count above which tool output is summarized instead of passed raw.",
     )
-    max_sentences: int = Field(
-        default=10,
-        description="Number of sentences to extract via LexRank (higher = longer summary).",
+    target_ratio: float = Field(
+        default=0.175,
+        description=(
+            "Target fraction of source tokens to retain in the summary (0.0–1.0). "
+            "0.175 means keep ~17.5% of the original — roughly the best 15–20%. "
+            "The summarizer derives the number of sentences to extract from this ratio "
+            "and the average sentence length of the document."
+        ),
+    )
+    min_sentences: int = Field(
+        default=15,
+        description="Minimum sentences to extract regardless of ratio. Prevents under-extraction on short documents.",
     )
 
 

@@ -613,14 +613,21 @@ def read_file_tool(
     path: str,
     start_line: int | None = None,
     end_line: int | None = None,
+    raw: bool = False,
 ) -> str:
     """Read the contents of a text file. Use this to examine source code, configuration files, logs, or any text-based file.
+
+    Large files are automatically summarized (extractive LexRank, ~15-20% of content).
+    To read specific sections use start_line + end_line. To bypass summarization and read
+    the complete file pass raw=True. When you receive a [DOC_SUMMARY] block, use this tool
+    again with start_line/end_line or raw=True to access the full content.
 
     Args:
         description: Explain why you are reading this file in short words. ALWAYS PROVIDE THIS PARAMETER FIRST.
         path: The **absolute** path to the file to read.
-        start_line: Optional starting line number (1-indexed, inclusive). Use with end_line to read a specific range.
-        end_line: Optional ending line number (1-indexed, inclusive). Use with start_line to read a specific range.
+        start_line: Optional starting line number (1-indexed, inclusive). Skips summarization — returns exact lines.
+        end_line: Optional ending line number (1-indexed, inclusive). Must be used together with start_line.
+        raw: If True, return the complete file without any summarization. Use when you need the full content.
     """
     try:
         sandbox = ensure_sandbox_initialized(runtime)
@@ -636,9 +643,18 @@ def read_file_tool(
         content = sandbox.read_file(path)
         if not content:
             return "(empty)"
+        # Line-range read: exact slice, no summarization
         if start_line is not None and end_line is not None:
-            content = "\n".join(content.splitlines()[start_line - 1 : end_line])
-            return content
+            lines = content.splitlines()
+            total = len(lines)
+            sliced = lines[start_line - 1 : end_line]
+            header = f"[Lines {start_line}–{min(end_line, total)} of {total} total]\n"
+            return header + "\n".join(sliced)
+        # raw=True: return full content with a line-count header so agent knows the size
+        if raw:
+            total = content.count("\n") + 1
+            return f"[Full file — {total} lines]\n{content}"
+        # Default: auto-summarize if large
         from deerflow.utils.doc_summarizer import maybe_summarize
 
         return maybe_summarize(content, source=requested_path, source_type="file")

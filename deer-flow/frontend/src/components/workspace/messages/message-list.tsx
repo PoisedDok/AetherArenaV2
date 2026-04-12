@@ -1,9 +1,11 @@
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
+import { useRef } from "react";
 
 import {
   Conversation,
   ConversationContent,
 } from "@/components/ai-elements/conversation";
+import { useCompactContext } from "@/core/compact/context";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
@@ -24,6 +26,7 @@ import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
 import { CompactBoundary, isCompactBoundaryContent } from "./compact-boundary";
+import { CompactingCard } from "./compacting-card";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -44,8 +47,23 @@ export function MessageList({
   const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
+  const { state: compactState } = useCompactContext();
   const messages = thread.messages;
-  if (thread.isThreadLoading && messages.length === 0) {
+
+  // Track whether we have ever loaded messages — once we have, never show the
+  // skeleton again. This prevents CompactingCard from being unmounted when the
+  // useStream hook briefly enters isThreadLoading=true after _prune_thread
+  // updates the LangGraph checkpoint (which would cause the skeleton to render,
+  // unmounting CompactingCard and potentially causing re-render loops).
+  const hasEverLoadedRef = useRef(messages.length > 0);
+  if (messages.length > 0) hasEverLoadedRef.current = true;
+
+  // Also don't show skeleton while compact is active — CompactingCard must
+  // stay mounted throughout the compact lifecycle.
+  const compactActive = compactState.status !== "idle";
+
+
+  if (thread.isThreadLoading && messages.length === 0 && !hasEverLoadedRef.current && !compactActive) {
     return <MessageListSkeleton />;
   }
   return (
@@ -210,6 +228,8 @@ export function MessageList({
             />
           );
         })}
+        {/* CompactingCard — appears while compact is in progress */}
+        <CompactingCard />
         {thread.isLoading && <StreamingIndicator className="my-4" />}
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>

@@ -39,8 +39,8 @@ export function TodoList({
   return (
     <div
       className={cn(
-        "flex h-fit w-full flex-col overflow-hidden backdrop-blur-2xl transition-all duration-200 ease-out",
-        hidden ? "pointer-events-none opacity-0" : "",
+        "flex w-full flex-col overflow-hidden backdrop-blur-2xl transition-all duration-200 ease-out",
+        hidden ? "pointer-events-none h-0 opacity-0" : "h-fit",
         className,
       )}
     >

@@ -341,6 +341,7 @@ export const enUS: Translations = {
     sections: {
       appearance: "Appearance",
       memory: "Memory",
+      compact: "Compact",
       tools: "Tools",
       models: "Models",
       skills: "Skills",

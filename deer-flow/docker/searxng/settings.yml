@@ -6,6 +6,9 @@ general:
 search:
   safe_search: 0
   autocomplete: ''
+  default_lang: 'en'
+  languages:
+    - 'en'
   formats:
     - html
     - json

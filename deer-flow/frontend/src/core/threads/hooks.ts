@@ -173,6 +173,7 @@ export function useThreadStream({
   // (which has the up-to-date `thread` object with the real threadId).
   // Assigned after sendMessage is defined; noop placeholder for first render.
   const sendMessageRef = useRef<(threadId: string, message: PromptInputMessage, extraContext?: Record<string, unknown>) => Promise<void>>(
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     async () => {},
   );
 
@@ -240,14 +241,17 @@ export function useThreadStream({
         serverThreadIdRef.current === normalizedThreadId;
 
       serverThreadIdRef.current = null;
-      setOptimisticMessages([]);
-      setFrozenMessages(null);
-      setPinnedPartials([]);
-      frozenIdsRef.current = new Set();
-      // Only reset the gate on a genuine thread navigation. For server-ID
-      // assignments (new thread getting its real ID mid-stream), the gate must
-      // stay locked — onFinish/onError/stopStream own the release.
+      // For a server-ID assignment (isNewThread flipping after onThreadCreated),
+      // the "change" is just our own new thread getting its canonical ID while the
+      // stream is still in flight. Clearing optimistic/frozen/pinned here causes
+      // the submitted message to visually disappear for a brief moment (the gap
+      // between clearing optimistic and the stream delivering real messages).
+      // Only wipe transient UI state on a genuine navigation to a different thread.
       if (!isServerIdAssignment) {
+        setOptimisticMessages([]);
+        setFrozenMessages(null);
+        setPinnedPartials([]);
+        frozenIdsRef.current = new Set();
         sendInFlightRef.current = false;
       }
       prevMsgCountRef.current = 0;
@@ -435,15 +439,12 @@ export function useThreadStream({
       // prevents 409 "Thread already exists" errors on newly created threads.
       setTimeout(() => {
         const activeThread = threadIdRef.current ?? threadId;
-        console.log("[queue:onFinish] drain check — thread=", activeThread, "threadIdRef=", threadIdRef.current, "threadId(closure)=", threadId);
         if (!activeThread) return;
         const result = processQueueIfReady(activeThread);
-        console.log("[queue:onFinish] processQueueIfReady →", result.processed, "msgs=", result.messages.length);
         if (result.processed && result.messages.length > 0) {
           // Flush all queued messages as one concatenated submission so the
           // agent sees everything at once rather than in separate turns.
           const combinedText = result.messages.map((m) => m.content).join("\n\n");
-          console.log("[queue:onFinish] sending combined flush, length=", combinedText.length);
           void sendMessageRef.current(activeThread, { text: combinedText, files: [] });
         }
       }, 0);
@@ -544,7 +545,6 @@ export function useThreadStream({
     }
 
     // Normal flow: clear optimistic when server count exceeds our pre-submit baseline.
-    console.log("[queue:clearEffect] thread.messages.length=", thread.messages.length, "prevMsgCount=", prevMsgCountRef.current, "optimistic=", optimisticMessages.length, "frozen=", frozenMessages !== null);
     if (thread.messages.length > prevMsgCountRef.current) {
       prevMsgCountRef.current = thread.messages.length;
       if (optimisticMessages.length > 0) setOptimisticMessages([]);
@@ -561,7 +561,6 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
     ) => {
       const trimmedText = message.text.trim();
-      console.log("[queue:sendMessage] called — inFlight=", sendInFlightRef.current, "text=", trimmedText.slice(0, 40));
       if (sendInFlightRef.current) {
         if (trimmedText) {
           enqueue({
@@ -570,7 +569,6 @@ export function useThreadStream({
             priority: "next",
             hasAttachments: (message.files?.length ?? 0) > 0,
           });
-          console.log("[queue:sendMessage] enqueued (gate busy)");
         }
         return;
       }
@@ -583,7 +581,6 @@ export function useThreadStream({
       // directly — sendMessage is a useCallback and thread.messages.length in its
       // closure is stale when called from the onFinish drain setTimeout.
       prevMsgCountRef.current = liveMessageCountRef.current;
-      console.log("[queue:sendMessage] proceeding — prevMsgCount=", prevMsgCountRef.current, "frozen=", frozenMessages !== null);
       // Do NOT clear frozenMessages here — clearing it eagerly causes partial AI
       // content to vanish from the UI before the server response arrives.
       // The effect at line 396 clears frozen when thread.messages.length increases
@@ -618,7 +615,6 @@ export function useThreadStream({
         });
       }
       setOptimisticMessages(newOptimistic);
-      console.log("[queue:sendMessage] setOptimisticMessages with", newOptimistic.length, "msgs");
 
       // Signal Guru to start pacing — user submitted, waiting for first token
       window.dispatchEvent(new CustomEvent("guru:state", { detail: "processing" }));
@@ -833,6 +829,13 @@ export function useThreadStream({
           runContext.provider_api_key = providerApiKey;
         }
 
+        // Log the current thread message list before submit so we can verify
+        // the compact boundary + summary are present after a compact operation.
+        const currentMessages = thread.messages;
+        console.log(`[thread] submitting to thread=${threadId} — current message count: ${currentMessages.length}`, {
+          messageTypes: currentMessages.map((m) => `${m.type}:${typeof m.id === "string" ? m.id.slice(0, 8) : "?"}:${typeof m.content === "string" ? m.content.slice(0, 60) : "[array]"}`),
+        });
+
         await thread.submit(
           {
             messages: [
@@ -862,12 +865,10 @@ export function useThreadStream({
         );
         // submit() resolved → SSE stream is now connected.
         // Gate (sendInFlightRef) stays true — owned by onFinish/onError/stopStream.
-        console.log("[queue:sendMessage] submit() resolved — SSE connected, gate stays true");
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       } catch (error) {
         // submit() threw before SSE connected — onFinish/onError won't fire,
         // so we must reset the gate here.
-        console.log("[queue:sendMessage] submit() threw:", error);
         sendInFlightRef.current = false;
         setOptimisticMessages([]);
         setIsUploading(false);
@@ -933,7 +934,7 @@ export function useThreadStream({
         void sendMessageRef.current(activeThread, { text: combinedText, files: [] });
       }
     }, 0);
-  }, [thread, optimisticMessages, pinnedPartials, sendMessage]);
+  }, [thread, optimisticMessages, pinnedPartials]);
 
   // Compute the message list to display.
   //
@@ -950,7 +951,6 @@ export function useThreadStream({
     let baseMessages: Message[];
     if (frozenMessages !== null) {
       // Stream was stopped; show frozen snapshot until new AI turn begins.
-      console.log("[queue:mergedThread] using frozenMessages, count=", frozenMessages.length);
       baseMessages = frozenMessages;
     } else if (pinnedPartials.length > 0) {
       // Frozen was cleared; inject pinned uncommitted messages at the split point.
@@ -968,7 +968,6 @@ export function useThreadStream({
         ...thread.messages.slice(splitIdx),
       ];
     } else {
-      console.log("[queue:mergedThread] using thread.messages, count=", thread.messages.length);
       baseMessages = thread.messages;
     }
 
@@ -1062,7 +1061,27 @@ export function useThreadStream({
     [sendMessage, frozenMessages, thread.messages],
   );
 
-  return [mergedThreadWithStop, sendMessage, isUploading, retryStream] as const;
+  /** Force the useStream hook to re-fetch the latest thread state.
+   * Use this after out-of-band thread mutations (e.g. compact/prune) so the
+   * message list reflects the new state (compact boundary appears) without a
+   * full page reload.
+   *
+   * Mechanism: briefly set onStreamThreadId=null (tears down useStream), then
+   * restore it so useStream remounts with reconnectOnMount=true and fetches
+   * the latest checkpoint. A simple streamRestartKey bump doesn't work because
+   * setOnStreamThreadId(sameValue) is a React no-op.
+   */
+  const refetchThread = useCallback(() => {
+    const target = threadIdRef.current;
+    console.log("[compact] refetchThread: remounting useStream to re-fetch thread state, target=", target);
+    setOnStreamThreadId(null); // tear down → useStream sees no thread
+    setTimeout(() => {
+      console.log("[compact] refetchThread: restoring threadId=", target);
+      setOnStreamThreadId(target); // remount → reconnectOnMount=true fetches latest state
+    }, 50);
+  }, []);
+
+  return [mergedThreadWithStop, sendMessage, isUploading, retryStream, refetchThread] as const;
 }
 
 export function useThreads(

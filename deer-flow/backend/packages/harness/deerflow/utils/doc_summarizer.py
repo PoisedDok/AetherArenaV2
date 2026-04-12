@@ -6,8 +6,11 @@ Pipeline: Gate → Sentence-split (NLTK) → LexRank score (sumy) → Select top
 - Sentence splitting: NLTK sent_tokenize with offset tracking.
 - Scoring: LexRank (Erkan & Radev, 2004) via sumy — graph centrality over
   TF-IDF cosine similarity.  Code content uses head/tail extraction instead.
-- Selection: top-N sentences reassembled in document order, with [SKIPPED SECTION]
-  markers between gaps so the agent can see where content was omitted.
+- Selection: sentences are selected until the target token ratio is reached.
+  n_sentences = max(min_sentences, int(token_count * target_ratio / avg_tokens_per_sent))
+  This keeps ~15–20% of the original by default, proportional to document size.
+- Gaps between selected sentences are marked with [SKIPPED SECTION] so the
+  agent can see where content was omitted.
 - Fallback: if sumy/NLTK are unavailable, content is truncated with a clear note.
 
 Used by read_file, web_fetch, and the conversation compact engine.
@@ -33,7 +36,9 @@ _SUMY_AVAILABLE: bool | None = None
 _TIKTOKEN_ENC = None
 
 _MIN_SENTENCE_CHARS = 20
-_MAX_LEXRANK_CHARS = 100_000  # above this, use head/tail instead (O(N²) guard)
+# Raise ceiling — large docs up to ~400k chars (~100k tokens) still use LexRank.
+# Head/tail fallback only kicks in beyond this.
+_MAX_LEXRANK_CHARS = 400_000
 _CHARS_PER_TOKEN = 4
 
 _BIB_MARKER_RE = re.compile(
@@ -231,12 +236,12 @@ def _lexrank_select(full_text: str, all_sents: list[tuple[str, int, int]], n_sen
 # Head/tail extraction for code
 # ---------------------------------------------------------------------------
 
-def _extract_code_head_tail(text: str, name: str, max_tokens: int, target_sentences: int) -> str:
+def _extract_code_head_tail(text: str, name: str, max_tokens: int, n_sentences: int) -> str:
     max_chars = max_tokens * _CHARS_PER_TOKEN
     lines = text.splitlines()
     total = len(lines)
-    head_n = min(target_sentences * 2, total)
-    tail_n = min(target_sentences, total)
+    head_n = min(n_sentences * 2, total)
+    tail_n = min(n_sentences, total)
 
     if head_n + tail_n >= total:
         return text
@@ -251,16 +256,51 @@ def _extract_code_head_tail(text: str, name: str, max_tokens: int, target_senten
 
 
 # ---------------------------------------------------------------------------
+# Config resolution
+# ---------------------------------------------------------------------------
+
+def _get_summarization_params(
+    token_threshold: int | None,
+    target_ratio: float | None,
+) -> tuple[int, float, int]:
+    """Returns (threshold, target_ratio, min_sentences)."""
+    default_threshold = 2000
+    default_ratio = 0.175
+    default_min_sentences = 15
+    try:
+        from deerflow.config.doc_summarization_config import get_doc_summarization_config
+        cfg = get_doc_summarization_config()
+        if not cfg.enabled:
+            return 10_000_000, default_ratio, default_min_sentences
+        return (
+            token_threshold if token_threshold is not None else cfg.token_threshold,
+            target_ratio if target_ratio is not None else cfg.target_ratio,
+            cfg.min_sentences,
+        )
+    except Exception:
+        return (
+            token_threshold if token_threshold is not None else default_threshold,
+            target_ratio if target_ratio is not None else default_ratio,
+            default_min_sentences,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Core extraction
 # ---------------------------------------------------------------------------
 
 def _smart_extract(
     text: str,
     max_tokens: int,
-    target_sentences: int,
+    target_ratio: float = 0.175,
+    min_sentences: int = 15,
     is_code: bool = False,
 ) -> tuple[str, bool]:
     """Run the Gate → Split → Score → Select pipeline.
+
+    Derives n_sentences from target_ratio × document size so the summary
+    always retains roughly target_ratio of the source tokens regardless of
+    document length.
 
     Returns (extracted_text, was_summarized).
     """
@@ -269,7 +309,9 @@ def _smart_extract(
         return text, False
 
     if is_code or len(text) > _MAX_LEXRANK_CHARS:
-        return _extract_code_head_tail(text, "content", max_tokens, target_sentences), True
+        # Estimate n_sentences for head/tail as well
+        n_est = max(min_sentences, int(token_count * target_ratio / max(1, token_count / max(1, text.count(".") + 1))))
+        return _extract_code_head_tail(text, "content", max_tokens, n_est), True
 
     all_sents = _split_sentences_with_offsets(text)
     if not all_sents:
@@ -278,8 +320,14 @@ def _smart_extract(
         return truncated, True
 
     n = len(all_sents)
-    target = min(target_sentences, n)
-    selected_indices = _lexrank_select(text, all_sents, target)
+
+    # Derive sentence count from ratio: how many sentences ≈ target_ratio of tokens
+    target_tokens = int(token_count * target_ratio)
+    avg_tokens_per_sent = token_count / n
+    n_sentences = max(min_sentences, int(target_tokens / max(1.0, avg_tokens_per_sent)))
+    n_sentences = min(n_sentences, n)
+
+    selected_indices = _lexrank_select(text, all_sents, n_sentences)
 
     parts: list[str] = []
     prev = -1
@@ -293,29 +341,6 @@ def _smart_extract(
 
 
 # ---------------------------------------------------------------------------
-# Config resolution
-# ---------------------------------------------------------------------------
-
-def _get_config_values(token_threshold: int | None, max_sentences: int | None) -> tuple[int, int]:
-    default_threshold = 2000
-    default_sentences = 10
-    try:
-        from deerflow.config.doc_summarization_config import get_doc_summarization_config
-        cfg = get_doc_summarization_config()
-        if not cfg.enabled:
-            return 10_000_000, default_sentences
-        return (
-            token_threshold if token_threshold is not None else cfg.token_threshold,
-            max_sentences if max_sentences is not None else cfg.max_sentences,
-        )
-    except Exception:
-        return (
-            token_threshold if token_threshold is not None else default_threshold,
-            max_sentences if max_sentences is not None else default_sentences,
-        )
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -324,7 +349,7 @@ def maybe_summarize(
     source: str,
     source_type: str = "file",
     token_threshold: int | None = None,
-    max_sentences: int | None = None,
+    target_ratio: float | None = None,
 ) -> str:
     """Summarize content if it exceeds the token threshold.
 
@@ -332,17 +357,21 @@ def maybe_summarize(
     If over threshold, runs the LexRank pipeline and wraps the result with
     metadata so the agent knows it received a summary and how to get more.
 
+    The number of sentences extracted is derived from target_ratio × document
+    size so the summary retains roughly that fraction of the source tokens
+    (default ~17.5%, i.e. the best 15–20% of the document).
+
     Args:
         content: Raw text from a tool.
         source: File path or URL — used in the summary header.
         source_type: "file" or "url" — controls the read-more hint.
-        token_threshold: Override config threshold.
-        max_sentences: Override config sentence count.
+        token_threshold: Override config threshold (tokens).
+        target_ratio: Override config ratio (0.0–1.0).
     """
     if not content or not content.strip():
         return content
 
-    threshold, sentences = _get_config_values(token_threshold, max_sentences)
+    threshold, ratio, min_sentences = _get_summarization_params(token_threshold, target_ratio)
 
     token_count = estimate_tokens(content)
     if token_count <= threshold:
@@ -356,7 +385,8 @@ def maybe_summarize(
         approx_chars = threshold * _CHARS_PER_TOKEN
         truncated = content[:approx_chars]
         hint = (
-            f'Use read_file path="{source}" with start_line/end_line to read sections.'
+            f'Use read_file path="{source}" with start_line/end_line to read a section, '
+            f'or raw=True to read the complete document.'
             if source_type == "file"
             else f'Re-fetch "{source}" with a more focused query.'
         )
@@ -368,7 +398,7 @@ def maybe_summarize(
         )
 
     try:
-        extracted, was_summarized = _smart_extract(content, threshold, sentences, is_code=is_code)
+        extracted, was_summarized = _smart_extract(content, threshold, target_ratio=ratio, min_sentences=min_sentences, is_code=is_code)
 
         if not was_summarized:
             return content
@@ -378,22 +408,25 @@ def maybe_summarize(
 
         total_lines = content.count("\n") + 1
         summary_tokens = estimate_tokens(extracted)
-        ratio = round(summary_tokens / token_count, 2)
+        actual_ratio = round(summary_tokens / token_count, 2)
 
         if source_type == "file":
-            read_hint = f'Use read_file path="{source}" with start_line/end_line to read specific sections.'
+            read_hint = (
+                f'Use read_file path="{source}" with start_line/end_line to read a specific section '
+                f'(e.g. start_line=1 end_line=100), or raw=True to read the complete document without summarization.'
+            )
         else:
             read_hint = f'Re-fetch "{source}" with a more focused query, or request specific sections.'
 
-        skipped_count = content.count("[SKIPPED SECTION]") if "[SKIPPED SECTION]" in extracted else 0
+        skipped_count = extracted.count("[SKIPPED SECTION]")
         skipped_note = f" ({skipped_count} section(s) skipped)" if skipped_count else ""
 
         return (
             f'[DOC_SUMMARY source="{source}" total_lines={total_lines} '
-            f"original_tokens={token_count} summary_tokens={summary_tokens} ratio={ratio}{skipped_note}]\n"
+            f"original_tokens={token_count} summary_tokens={summary_tokens} ratio={actual_ratio}{skipped_note}]\n"
             f"NOTE: Document exceeded {threshold} tokens. Extractive summary (LexRank) shown — "
-            f"most informative sentences preserved in document order.\n"
-            f"To read full content: {read_hint}\n\n"
+            f"best ~{int(ratio * 100)}% of content preserved in document order.\n"
+            f"To read more: {read_hint}\n\n"
             f"{extracted}\n\n"
             f"[END_DOC_SUMMARY]"
         )

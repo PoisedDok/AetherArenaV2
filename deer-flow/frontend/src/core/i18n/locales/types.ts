@@ -272,6 +272,7 @@ export interface Translations {
     sections: {
       appearance: string;
       memory: string;
+      compact: string;
       tools: string;
       models: string;
       skills: string;

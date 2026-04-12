@@ -17,6 +17,7 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
+import { CompactProvider, useCompactContext } from "@/core/compact/context";
 import { getGuru } from "@/core/guru/guru";
 import { getGuruIntroContext } from "@/core/guru/prompt";
 import { useI18n } from "@/core/i18n/hooks";
@@ -28,6 +29,14 @@ import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
+  return (
+    <CompactProvider>
+      <ChatPageInner />
+    </CompactProvider>
+  );
+}
+
+function ChatPageInner() {
   const { t } = useI18n();
   const [settings, setSettings] = useLocalSettings();
 
@@ -35,10 +44,11 @@ export default function ChatPage() {
   useSpecificChatMode();
 
   const { showNotification } = useNotification();
+  const { refetchThreadRef } = useCompactContext();
 
   const [lastStreamError, setLastStreamError] = useState(false);
 
-  const [thread, sendMessage, isUploading, retryStream] = useThreadStream({
+  const [thread, sendMessage, isUploading, retryStream, refetchThread] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: settings.context,
     isMock,
@@ -67,6 +77,12 @@ export default function ChatPage() {
       }
     },
   });
+
+  // Wire the thread refetch function into CompactContext so CompactingCard can
+  // trigger a real state reload after compact without a full page refresh.
+  useEffect(() => {
+    refetchThreadRef.current = refetchThread;
+  }, [refetchThread, refetchThreadRef]);
 
   // Sync local error state with the SDK's immutable error property.
   // Once error is set we track it locally so we can clear it on a successful submit.
@@ -140,7 +156,7 @@ export default function ChatPage() {
             <div className="z-30 flex shrink-0 flex-col items-center px-4 pb-4">
               <div
                 className={cn(
-                  "w-full",
+                  "w-full transition-[transform,max-width] duration-300 ease-in-out",
                   isNewThread && "-translate-y-[calc(50vh-96px)]",
                   isNewThread
                     ? "max-w-(--container-width-sm)"

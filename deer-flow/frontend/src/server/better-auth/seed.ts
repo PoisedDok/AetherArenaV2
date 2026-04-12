@@ -4,11 +4,18 @@ import { auth } from ".";
 // independently against its own memoryAdapter instance.
 let seeded = false;
 
+/** Load auth credentials from environment variables */
+function getAuthCredentials(): { username: string; password: string | undefined } {
+  const username = process.env.APP_USERNAME ?? "admin";
+  const password = process.env.APP_PASSWORD;
+
+  return { username, password };
+}
+
 export async function seedAuthUser() {
   if (seeded) return;
 
-  const username = process.env.APP_USERNAME ?? "admin";
-  const password = process.env.APP_PASSWORD;
+  const { username, password } = getAuthCredentials();
   // better-auth requires valid email format (Zod z.email() — needs a TLD)
   const email = username.includes("@") ? username : `${username}@local.app`;
 
