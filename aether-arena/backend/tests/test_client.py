@@ -1,4 +1,4 @@
-"""Tests for DeerFlowClient."""
+"""Tests for AetherArenaClient."""
 
 import asyncio
 import concurrent.futures
@@ -16,7 +16,7 @@ from app.gateway.routers.memory import MemoryConfigResponse, MemoryStatusRespons
 from app.gateway.routers.models import ModelResponse, ModelsListResponse
 from app.gateway.routers.skills import SkillInstallResponse, SkillResponse, SkillsListResponse
 from app.gateway.routers.uploads import UploadResponse
-from aether.client import DeerFlowClient
+from aether.client import AetherArenaClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,9 +47,9 @@ def mock_app_config():
 
 @pytest.fixture
 def client(mock_app_config):
-    """Create a DeerFlowClient with mocked config loading."""
+    """Create a AetherArenaClient with mocked config loading."""
     with patch("aether.client.get_app_config", return_value=mock_app_config):
-        return DeerFlowClient()
+        return AetherArenaClient()
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ class TestClientInit:
 
     def test_custom_params(self, mock_app_config):
         with patch("aether.client.get_app_config", return_value=mock_app_config):
-            c = DeerFlowClient(
+            c = AetherArenaClient(
                 model_name="gpt-4",
                 thinking_enabled=False,
                 subagent_enabled=True,
@@ -85,22 +85,22 @@ class TestClientInit:
     def test_invalid_agent_name(self, mock_app_config):
         with patch("aether.client.get_app_config", return_value=mock_app_config):
             with pytest.raises(ValueError, match="Invalid agent name"):
-                DeerFlowClient(agent_name="invalid name with spaces!")
+                AetherArenaClient(agent_name="invalid name with spaces!")
             with pytest.raises(ValueError, match="Invalid agent name"):
-                DeerFlowClient(agent_name="../path/traversal")
+                AetherArenaClient(agent_name="../path/traversal")
 
     def test_custom_config_path(self, mock_app_config):
         with (
             patch("aether.client.reload_app_config") as mock_reload,
             patch("aether.client.get_app_config", return_value=mock_app_config),
         ):
-            DeerFlowClient(config_path="/tmp/custom.yaml")
+            AetherArenaClient(config_path="/tmp/custom.yaml")
             mock_reload.assert_called_once_with("/tmp/custom.yaml")
 
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
         with patch("aether.client.get_app_config", return_value=mock_app_config):
-            c = DeerFlowClient(checkpointer=cp)
+            c = AetherArenaClient(checkpointer=cp)
         assert c._checkpointer is cp
 
 
@@ -361,7 +361,7 @@ class TestChat:
 
 class TestExtractText:
     def test_string(self):
-        assert DeerFlowClient._extract_text("hello") == "hello"
+        assert AetherArenaClient._extract_text("hello") == "hello"
 
     def test_list_text_blocks(self):
         content = [
@@ -369,16 +369,16 @@ class TestExtractText:
             {"type": "thinking", "thinking": "skip"},
             {"type": "text", "text": "second"},
         ]
-        assert DeerFlowClient._extract_text(content) == "first\nsecond"
+        assert AetherArenaClient._extract_text(content) == "first\nsecond"
 
     def test_list_plain_strings(self):
-        assert DeerFlowClient._extract_text(["a", "b"]) == "a\nb"
+        assert AetherArenaClient._extract_text(["a", "b"]) == "a\nb"
 
     def test_empty_list(self):
-        assert DeerFlowClient._extract_text([]) == ""
+        assert AetherArenaClient._extract_text([]) == ""
 
     def test_other_type(self):
-        assert DeerFlowClient._extract_text(42) == "42"
+        assert AetherArenaClient._extract_text(42) == "42"
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +397,7 @@ class TestEnsureAgent:
             patch("aether.client.create_agent", return_value=mock_agent),
             patch("aether.client._build_middlewares", return_value=[]) as mock_build_middlewares,
             patch("aether.client.apply_prompt_template", return_value="prompt") as mock_apply_prompt,
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=None),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._agent_name = "custom-agent"
@@ -658,7 +659,7 @@ class TestMemoryManagement:
     def test_get_memory_config(self, client):
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".deer-flow/memory.json"
+        config.storage_path = ".aether-arena/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
@@ -674,7 +675,7 @@ class TestMemoryManagement:
     def test_get_memory_status(self, client):
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".deer-flow/memory.json"
+        config.storage_path = ".aether-arena/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
@@ -710,7 +711,7 @@ class TestUploads:
             uploads_dir = tmp_path / "uploads"
             uploads_dir.mkdir()
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 result = client.upload_files("thread-1", [src_file])
 
             assert result["success"] is True
@@ -766,7 +767,7 @@ class TestUploads:
                 return client.upload_files("thread-async", [first, second])
 
             with (
-                patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir),
+                patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir),
                 patch("aether.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
                 patch("aether.utils.file_conversion.convert_file_to_markdown", side_effect=fake_convert),
                 patch("concurrent.futures.ThreadPoolExecutor", FakeExecutor),
@@ -787,7 +788,7 @@ class TestUploads:
             (uploads_dir / "a.txt").write_text("a")
             (uploads_dir / "b.txt").write_text("bb")
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 result = client.list_uploads("thread-1")
 
             assert result["count"] == 2
@@ -803,7 +804,7 @@ class TestUploads:
             uploads_dir = Path(tmp)
             (uploads_dir / "delete-me.txt").write_text("gone")
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 result = client.delete_upload("thread-1", "delete-me.txt")
 
             assert result["success"] is True
@@ -812,14 +813,14 @@ class TestUploads:
 
     def test_delete_upload_not_found(self, client):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=Path(tmp)):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=Path(tmp)):
                 with pytest.raises(FileNotFoundError):
                     client.delete_upload("thread-1", "nope.txt")
 
     def test_delete_upload_path_traversal(self, client):
         with tempfile.TemporaryDirectory() as tmp:
             uploads_dir = Path(tmp)
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 with pytest.raises(PermissionError):
                     client.delete_upload("thread-1", "../../etc/passwd")
 
@@ -1023,7 +1024,7 @@ class TestScenarioFileLifecycle:
             (tmp_path / "report.txt").write_text("quarterly report data")
             (tmp_path / "data.csv").write_text("a,b,c\n1,2,3")
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 # Step 1: Upload
                 result = client.upload_files(
                     "t-lifecycle",
@@ -1064,7 +1065,7 @@ class TestScenarioFileLifecycle:
             src_file = tmp_path / "input.txt"
             src_file.write_text("raw data to process")
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
                 uploaded = client.upload_files("t-artifact", [src_file])
                 assert len(uploaded["files"]) == 1
 
@@ -1200,6 +1201,7 @@ class TestScenarioAgentRecreation:
             patch("aether.client.create_agent", side_effect=fake_create_agent),
             patch("aether.client._build_middlewares", return_value=[]),
             patch("aether.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=None),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config_a)
@@ -1227,6 +1229,7 @@ class TestScenarioAgentRecreation:
             patch("aether.client.create_agent", side_effect=fake_create_agent),
             patch("aether.client._build_middlewares", return_value=[]),
             patch("aether.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=None),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1251,6 +1254,7 @@ class TestScenarioAgentRecreation:
             patch("aether.client.create_agent", side_effect=fake_create_agent),
             patch("aether.client._build_middlewares", return_value=[]),
             patch("aether.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=None),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1298,7 +1302,7 @@ class TestScenarioThreadIsolation:
             def get_dir(thread_id):
                 return uploads_a if thread_id == "thread-a" else uploads_b
 
-            with patch.object(DeerFlowClient, "_get_uploads_dir", side_effect=get_dir):
+            with patch.object(AetherArenaClient, "_get_uploads_dir", side_effect=get_dir):
                 client.upload_files("thread-a", [src_file])
 
                 files_a = client.list_uploads("thread-a")
@@ -1345,7 +1349,7 @@ class TestScenarioMemoryWorkflow:
 
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".deer-flow/memory.json"
+        config.storage_path = ".aether-arena/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
@@ -1524,7 +1528,7 @@ class TestScenarioEdgeCases:
             pdf_file.write_bytes(b"%PDF-1.4 fake content")
 
             with (
-                patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir),
+                patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir),
                 patch("aether.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
                 patch("aether.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
             ):
@@ -1543,7 +1547,7 @@ class TestScenarioEdgeCases:
 
 
 class TestGatewayConformance:
-    """Validate that DeerFlowClient return dicts conform to Gateway Pydantic response models.
+    """Validate that AetherArenaClient return dicts conform to Gateway Pydantic response models.
 
     Each test calls a client method, then parses the result through the
     corresponding Gateway response model. If the client drifts (missing or
@@ -1563,7 +1567,7 @@ class TestGatewayConformance:
         mock_app_config.models = [model]
 
         with patch("aether.client.get_app_config", return_value=mock_app_config):
-            client = DeerFlowClient()
+            client = AetherArenaClient()
 
         result = client.list_models()
         parsed = ModelsListResponse(**result)
@@ -1587,7 +1591,7 @@ class TestGatewayConformance:
         mock_app_config.get_model_config.return_value = model
 
         with patch("aether.client.get_app_config", return_value=mock_app_config):
-            client = DeerFlowClient()
+            client = AetherArenaClient()
 
         result = client.get_model("test-model")
         assert result is not None
@@ -1701,7 +1705,7 @@ class TestGatewayConformance:
         src_file = tmp_path / "hello.txt"
         src_file.write_text("hello")
 
-        with patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir):
+        with patch.object(AetherArenaClient, "_get_uploads_dir", return_value=uploads_dir):
             result = client.upload_files("t-conform", [src_file])
 
         parsed = UploadResponse(**result)
@@ -1711,7 +1715,7 @@ class TestGatewayConformance:
     def test_get_memory_config(self, client):
         mem_cfg = MagicMock()
         mem_cfg.enabled = True
-        mem_cfg.storage_path = ".deer-flow/memory.json"
+        mem_cfg.storage_path = ".aether-arena/memory.json"
         mem_cfg.debounce_seconds = 30
         mem_cfg.max_facts = 100
         mem_cfg.fact_confidence_threshold = 0.7
@@ -1728,7 +1732,7 @@ class TestGatewayConformance:
     def test_get_memory_status(self, client):
         mem_cfg = MagicMock()
         mem_cfg.enabled = True
-        mem_cfg.storage_path = ".deer-flow/memory.json"
+        mem_cfg.storage_path = ".aether-arena/memory.json"
         mem_cfg.debounce_seconds = 30
         mem_cfg.max_facts = 100
         mem_cfg.fact_confidence_threshold = 0.7

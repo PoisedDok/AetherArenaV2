@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Smoke-check: Gateway /api/models (workspace chat uses same list), SearXNG, harness web_search tests.
-# Web search in chat = LangGraph lead_agent → config.yaml `tools` → `deerflow.community.searxng.tools:web_search_tool`.
+# Web search in chat = LangGraph lead_agent → config.yaml `tools` → `aether-arena.community.searxng.tools:web_search_tool`.
 #
-# Usage from deer-flow/:
+# Usage from aether-arena/:
 #   ./scripts/verify-agent-harness.sh
 #
 set -euo pipefail
@@ -21,19 +21,19 @@ echo "== Gateway GET /api/models =="
 mj="$(curl -sS "${NGINX_URL}/api/models" || true)"
 if ! echo "$mj" | jq -e '.models | type == "array"' >/dev/null 2>&1; then
   echo "$mj" | head -c 400
-  die "Not JSON from ${NGINX_URL}/api/models (if 502 after gateway fix: docker restart deer-flow-nginx)"
+  die "Not JSON from ${NGINX_URL}/api/models (if 502 after gateway fix: docker restart aether-arena-nginx)"
 fi
 n="$(echo "$mj" | jq '.models | length')"
 [[ "${n:-0}" -ge 1 ]] || die "Empty models[]"
 
 echo "== Harness pytest: web_search (SearXNG tool) =="
-if docker exec deer-flow-gateway true 2>/dev/null; then
-  docker exec deer-flow-gateway sh -c 'cd /app/backend && PYTHONPATH=. uv run pytest tests/test_searxng_tool.py -q'
+if docker exec aether-arena-gateway true 2>/dev/null; then
+  docker exec aether-arena-gateway sh -c 'cd /app/backend && PYTHONPATH=. uv run pytest tests/test_searxng_tool.py -q'
 elif command -v uv >/dev/null 2>&1; then
   cd "${ROOT}/backend"
   PYTHONPATH=. uv run pytest tests/test_searxng_tool.py -q
 else
-  echo "WARN: neither deer-flow-gateway nor uv available — skip pytest (install uv or run stack)."
+  echo "WARN: neither aether-arena-gateway nor uv available — skip pytest (install uv or run stack)."
 fi
 
 echo "OK."

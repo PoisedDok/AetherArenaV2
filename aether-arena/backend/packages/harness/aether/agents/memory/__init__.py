@@ -1,4 +1,4 @@
-"""Memory module for DeerFlow.
+"""Memory module for AetherArena.
 
 This module provides a global memory mechanism that:
 - Stores user context and conversation history in memory.json

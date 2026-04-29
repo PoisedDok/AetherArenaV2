@@ -58,7 +58,7 @@ def _first_whitelisted_http_url(data: dict[str, Any]) -> str | None:
 
 
 def model_to_gateway_dict(model: ModelConfig) -> dict[str, Any]:
-    """Build the public model DTO for the gateway API and DeerFlowClient (no secrets)."""
+    """Build the public model DTO for the gateway API and AetherArenaClient (no secrets)."""
     dumped = model.model_dump(mode="python")
     endpoint_url = _first_whitelisted_http_url(dumped)
     return {

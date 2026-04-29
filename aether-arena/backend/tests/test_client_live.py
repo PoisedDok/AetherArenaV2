@@ -1,4 +1,4 @@
-"""Live integration tests for DeerFlowClient with real API.
+"""Live integration tests for AetherArenaClient with real API.
 
 These tests require a working config.yaml with valid API credentials.
 They are skipped in CI and must be run explicitly:
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from aether.client import DeerFlowClient, StreamEvent
+from aether.client import AetherArenaClient, StreamEvent
 
 # Skip entire module in CI or when no config.yaml exists
 _skip_reason = None
@@ -32,13 +32,13 @@ if _skip_reason:
 
 @pytest.fixture(scope="module")
 def client():
-    """Create a real DeerFlowClient (no mocks).
+    """Create a real AetherArenaClient (no mocks).
 
     Skips if the environment is missing required variables (e.g. running
     outside Docker where $SEARXNG_URL etc. are not set).
     """
     try:
-        return DeerFlowClient(config_path=str(_config_path), thinking_enabled=False)
+        return AetherArenaClient(config_path=str(_config_path), thinking_enabled=False)
     except (ValueError, FileNotFoundError) as exc:
         pytest.skip(f"Live client unavailable: {exc}")
 

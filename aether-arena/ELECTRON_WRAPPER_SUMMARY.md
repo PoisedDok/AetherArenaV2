@@ -101,7 +101,7 @@ Future enhancements (not required):
 
 1. **Better icons**: Add `icon.icns` (macOS) and `icon.ico` (Windows)
 2. **Menu bar**: Tray icon for quick access
-3. **Deep links**: `deerflow://` protocol
+3. **Deep links**: `aether-arena://` protocol
 4. **Auto-updater**: electron-updater integration
 5. **Native notifications**: System notifications
 

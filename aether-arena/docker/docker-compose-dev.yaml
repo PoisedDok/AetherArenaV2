@@ -1,4 +1,4 @@
-# DeerFlow Development Environment
+# AetherArena Development Environment
 # Usage: docker-compose -f docker-compose-dev.yaml up --build
 #
 # Services:
@@ -24,18 +24,18 @@ services:
     build:
       context: ./provisioner
       dockerfile: Dockerfile
-    container_name: deer-flow-provisioner
+    container_name: aether-arena-provisioner
     volumes:
       - ~/.kube/config:/root/.kube/config:ro
     environment:
-      - K8S_NAMESPACE=deer-flow
+      - K8S_NAMESPACE=aether-arena
       - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
       # Host paths for K8s HostPath volumes (must be absolute paths accessible by K8s node)
       # On Docker Desktop/OrbStack, use your actual host paths like /Users/username/...
       # Set these in your shell before running docker-compose:
-      #   export DEER_FLOW_ROOT=/absolute/path/to/deer-flow
-      - SKILLS_HOST_PATH=${DEER_FLOW_ROOT}/skills
-      - THREADS_HOST_PATH=${DEER_FLOW_ROOT}/backend/.deer-flow/threads
+      #   export AETHER_ARENA_ROOT=/absolute/path/to/aether-arena
+      - SKILLS_HOST_PATH=${AETHER_ARENA_ROOT}/skills
+      - THREADS_HOST_PATH=${AETHER_ARENA_ROOT}/backend/.aether-arena/threads
       - KUBECONFIG_PATH=/root/.kube/config
       - NODE_HOST=host.docker.internal
       # Override K8S API server URL since kubeconfig uses 127.0.0.1
@@ -46,7 +46,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -62,7 +62,7 @@ services:
   # - nginx.conf: includes provisioner route (provisioner mode)
   nginx:
     image: nginx:alpine
-    container_name: deer-flow-nginx
+    container_name: aether-arena-nginx
     ports:
       - "2026:2026"
     volumes:
@@ -77,12 +77,12 @@ services:
       searxng:
         condition: service_healthy
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
     restart: unless-stopped
 
   # SearXNG (AGPL-3.0) — host :2030 → container :8080 (image listens on 8080 internally)
   searxng:
-    container_name: deer-flow-searxng
+    container_name: aether-arena-searxng
     image: docker.io/searxng/searxng:latest
     restart: unless-stopped
     ports:
@@ -99,7 +99,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
 
   # Frontend - Next.js Development Server
   frontend:
@@ -109,7 +109,7 @@ services:
       target: dev
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
-    container_name: deer-flow-frontend
+    container_name: aether-arena-frontend
     command: sh -c "cd frontend && pnpm run dev > /app/logs/frontend.log 2>&1"
     volumes:
       - ../frontend/src:/app/frontend/src
@@ -131,7 +131,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
     restart: unless-stopped
 
   # Backend - Gateway API
@@ -140,7 +140,7 @@ services:
       context: ../
       dockerfile: backend/Dockerfile
       # cache_from disabled - requires manual setup: mkdir -p /tmp/docker-cache-gateway
-    container_name: deer-flow-gateway
+    container_name: aether-arena-gateway
     command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --reload --reload-include='*.yaml .env' > /app/logs/gateway.log 2>&1"
     volumes:
       - ../backend/:/app/backend/
@@ -172,15 +172,15 @@ services:
     environment:
       - CI=true
       # Override relative paths from host .env (process cwd is often /app/backend)
-      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
-      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - AETHER_ARENA_CONFIG_PATH=/app/config.yaml
+      - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       # config.yaml harness tool `url: $SEARXNG_URL`
       - SEARXNG_URL=http://searxng:8080
-      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
-      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
-      - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_ROOT}/backend/.aether-arena
+      - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_ROOT}/skills
+      - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # Point to the correct data directory (cwd is /app, not /app/backend)
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - AETHER_ARENA_HOME=/app/backend/.aether-arena
       # LangGraph Server connection (for compact endpoint)
       - LANGGRAPH_BASE_URL=http://langgraph:2024
     env_file:
@@ -192,7 +192,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
     restart: unless-stopped
 
   # Backend - LangGraph Server
@@ -201,7 +201,7 @@ services:
       context: ../
       dockerfile: backend/Dockerfile
       # cache_from disabled - requires manual setup: mkdir -p /tmp/docker-cache-langgraph
-    container_name: deer-flow-langgraph
+    container_name: aether-arena-langgraph
     command: sh -c "cd backend && uv run langgraph dev --no-browser --allow-blocking --host 0.0.0.0 --port 2024 > /app/logs/langgraph.log 2>&1"
     volumes:
       - ../backend/:/app/backend/
@@ -232,14 +232,14 @@ services:
     working_dir: /app
     environment:
       - CI=true
-      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
-      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - AETHER_ARENA_CONFIG_PATH=/app/config.yaml
+      - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - SEARXNG_URL=http://searxng:8080
-      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
-      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
-      - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_ROOT}/backend/.aether-arena
+      - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_ROOT}/skills
+      - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # Point to the correct data directory (cwd is /app, not /app/backend)
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - AETHER_ARENA_HOME=/app/backend/.aether-arena
     env_file:
       - ../.env
     extra_hosts:
@@ -249,7 +249,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     networks:
-      - deer-flow-dev
+      - aether-arena-dev
     restart: unless-stopped
 
 volumes:
@@ -259,7 +259,7 @@ volumes:
   langgraph-venv:
 
 networks:
-  deer-flow-dev:
+  aether-arena-dev:
     driver: bridge
     ipam:
       config:

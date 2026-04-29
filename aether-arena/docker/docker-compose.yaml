@@ -9,11 +9,11 @@
 #   - provisioner: (optional) Sandbox provisioner for Kubernetes mode
 #
 # Key environment variables (set via environment/.env or scripts/deploy.sh):
-#   DEER_FLOW_HOME                   — runtime data dir, default $REPO_ROOT/backend/.deer-flow
-#   DEER_FLOW_CONFIG_PATH            — path to config.yaml
-#   DEER_FLOW_EXTENSIONS_CONFIG_PATH — path to extensions_config.json
-#   DEER_FLOW_DOCKER_SOCKET          — Docker socket path, default /var/run/docker.sock
-#   DEER_FLOW_REPO_ROOT              — repo root (used for skills host path in DooD)
+#   AETHER_ARENA_HOME                   — runtime data dir, default $REPO_ROOT/backend/.aether-arena
+#   AETHER_ARENA_CONFIG_PATH            — path to config.yaml
+#   AETHER_ARENA_EXTENSIONS_CONFIG_PATH — path to extensions_config.json
+#   AETHER_ARENA_DOCKER_SOCKET          — Docker socket path, default /var/run/docker.sock
+#   AETHER_ARENA_REPO_ROOT              — repo root (used for skills host path in DooD)
 #   BETTER_AUTH_SECRET               — required for frontend auth/session security
 #
 # LangSmith tracing is disabled by default (LANGCHAIN_TRACING_V2=false).
@@ -25,7 +25,7 @@ services:
   # ── Reverse Proxy ──────────────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
-    container_name: deer-flow-nginx
+    container_name: aether-arena-nginx
     ports:
       - "${PORT:-2026}:2026"
     volumes:
@@ -40,12 +40,12 @@ services:
       searxng:
         condition: service_healthy
     networks:
-      - deer-flow
+      - aether-arena
     restart: unless-stopped
 
   # ── SearXNG (AGPL-3.0) — self-hosted web search backend ────────────────────
   searxng:
-    container_name: deer-flow-searxng
+    container_name: aether-arena-searxng
     image: docker.io/searxng/searxng:latest
     restart: unless-stopped
     volumes:
@@ -60,7 +60,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - deer-flow
+      - aether-arena
 
   # ── Frontend: Next.js Production ───────────────────────────────────────────
   frontend:
@@ -70,7 +70,7 @@ services:
       target: prod
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
-    container_name: deer-flow-frontend
+    container_name: aether-arena-frontend
     environment:
       # BETTER_AUTH_URL — set by deploy.sh to http://localhost:PORT dynamically
       # BETTER_AUTH_TRUSTED_ORIGINS is set via env_file (frontend/.env) — do not override here
@@ -83,7 +83,7 @@ services:
       - ../.env
       - ../frontend/.env
     networks:
-      - deer-flow
+      - aether-arena
     restart: unless-stopped
 
   # ── Gateway API ────────────────────────────────────────────────────────────
@@ -91,15 +91,15 @@ services:
     build:
       context: ../
       dockerfile: backend/Dockerfile
-    container_name: deer-flow-gateway
+    container_name: aether-arena-gateway
     command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --workers 2"
     volumes:
-      - ${DEER_FLOW_CONFIG_PATH}:/app/backend/config.yaml:ro
-      - ${DEER_FLOW_EXTENSIONS_CONFIG_PATH}:/app/backend/extensions_config.json:ro
+      - ${AETHER_ARENA_CONFIG_PATH}:/app/backend/config.yaml:ro
+      - ${AETHER_ARENA_EXTENSIONS_CONFIG_PATH}:/app/backend/extensions_config.json:ro
       - ../skills:/app/skills:ro
-      - ${DEER_FLOW_HOME}:/app/backend/.deer-flow
+      - ${AETHER_ARENA_HOME}:/app/backend/.aether-arena
       # DooD: AioSandboxProvider starts sandbox containers via host Docker daemon
-      - ${DEER_FLOW_DOCKER_SOCKET}:/var/run/docker.sock
+      - ${AETHER_ARENA_DOCKER_SOCKET}:/var/run/docker.sock
       # CLI auth directories for auto-auth (Claude Code + Codex CLI)
       - type: bind
         source: ${HOME:?HOME must be set}/.claude
@@ -116,11 +116,11 @@ services:
     working_dir: /app
     environment:
       - CI=true
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - AETHER_ARENA_HOME=/app/backend/.aether-arena
       # DooD path/network translation
-      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_HOME}
-      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_REPO_ROOT}/skills
-      - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_HOME}
+      - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_REPO_ROOT}/skills
+      - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # SearXNG internal URL (used by config.yaml $SEARXNG_URL substitution)
       - SEARXNG_URL=http://searxng:8080
       # LangGraph Server connection (for compact endpoint)
@@ -130,7 +130,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - deer-flow
+      - aether-arena
     restart: unless-stopped
 
   # ── LangGraph Server ───────────────────────────────────────────────────────
@@ -140,16 +140,16 @@ services:
     build:
       context: ../
       dockerfile: backend/Dockerfile
-    container_name: deer-flow-langgraph
+    container_name: aether-arena-langgraph
     command: sh -c "cd /app/backend && uv run langgraph dev --no-browser --allow-blocking --no-reload --host 0.0.0.0 --port 2024"
     volumes:
-      - ${DEER_FLOW_CONFIG_PATH}:/app/config.yaml:ro
-      - ${DEER_FLOW_EXTENSIONS_CONFIG_PATH}:/app/extensions_config.json:ro
-      - ${DEER_FLOW_HOME}:/app/backend/.deer-flow
+      - ${AETHER_ARENA_CONFIG_PATH}:/app/config.yaml:ro
+      - ${AETHER_ARENA_EXTENSIONS_CONFIG_PATH}:/app/extensions_config.json:ro
+      - ${AETHER_ARENA_HOME}:/app/backend/.aether-arena
       - ../skills:/app/skills:ro
       - ../backend/.langgraph_api:/app/backend/.langgraph_api
       # DooD: same as gateway
-      - ${DEER_FLOW_DOCKER_SOCKET}:/var/run/docker.sock
+      - ${AETHER_ARENA_DOCKER_SOCKET}:/var/run/docker.sock
       # CLI auth directories for auto-auth (Claude Code + Codex CLI)
       - type: bind
         source: ${HOME:?HOME must be set}/.claude
@@ -165,12 +165,12 @@ services:
           create_host_path: true
     environment:
       - CI=true
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
-      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
-      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
-      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_HOME}
-      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_REPO_ROOT}/skills
-      - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      - AETHER_ARENA_HOME=/app/backend/.aether-arena
+      - AETHER_ARENA_CONFIG_PATH=/app/config.yaml
+      - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_HOME}
+      - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_REPO_ROOT}/skills
+      - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # SearXNG internal URL (used by config.yaml $SEARXNG_URL substitution)
       - SEARXNG_URL=http://searxng:8080
       # Disable LangSmith tracing — LANGSMITH_API_KEY is not required.
@@ -181,7 +181,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - deer-flow
+      - aether-arena
     restart: unless-stopped
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
@@ -191,14 +191,14 @@ services:
     build:
       context: ./provisioner
       dockerfile: Dockerfile
-    container_name: deer-flow-provisioner
+    container_name: aether-arena-provisioner
     volumes:
       - ~/.kube/config:/root/.kube/config:ro
     environment:
-      - K8S_NAMESPACE=deer-flow
+      - K8S_NAMESPACE=aether-arena
       - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
-      - SKILLS_HOST_PATH=${DEER_FLOW_REPO_ROOT}/skills
-      - THREADS_HOST_PATH=${DEER_FLOW_HOME}/threads
+      - SKILLS_HOST_PATH=${AETHER_ARENA_REPO_ROOT}/skills
+      - THREADS_HOST_PATH=${AETHER_ARENA_HOME}/threads
       - KUBECONFIG_PATH=/root/.kube/config
       - NODE_HOST=host.docker.internal
       - K8S_API_SERVER=https://host.docker.internal:26443
@@ -207,7 +207,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - deer-flow
+      - aether-arena
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -215,5 +215,5 @@ services:
       timeout: 5s
       retries: 6
 networks:
-  deer-flow:
+  aether-arena:
     driver: bridge

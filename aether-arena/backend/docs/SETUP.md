@@ -30,7 +30,7 @@ AetherArena uses a YAML configuration file that should be placed in the **projec
 4. **Verify configuration**:
    ```bash
    cd backend
-   python -c "from deerflow.config import get_app_config; print('✓ Config loaded:', get_app_config().models[0].name)"
+   python -c "from aether.config import get_app_config; print('✓ Config loaded:', get_app_config().models[0].name)"
    ```
 
 ## Important Notes
@@ -43,7 +43,7 @@ AetherArena uses a YAML configuration file that should be placed in the **projec
 
 The backend searches for `config.yaml` in this order:
 
-1. `DEER_FLOW_CONFIG_PATH` environment variable (if set)
+1. `AETHER_ARENA_CONFIG_PATH` environment variable (if set)
 2. `backend/config.yaml` (current directory when running from backend/)
 3. `aether-arena/config.yaml` (parent directory - **recommended location**)
 
@@ -51,7 +51,7 @@ The backend searches for `config.yaml` in this order:
 
 ## Sandbox Setup (Optional but Recommended)
 
-If you plan to use Docker/Container-based sandbox (configured in `config.yaml` under `sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider`), it's highly recommended to pre-pull the container image:
+If you plan to use Docker/Container-based sandbox (configured in `config.yaml` under `sandbox.use: aether.community.aio_sandbox:AioSandboxProvider`), it's highly recommended to pre-pull the container image:
 
 ```bash
 # From project root
@@ -72,7 +72,7 @@ If you skip this step, the image will be automatically pulled on first agent exe
 ```bash
 # Check where the backend is looking
 cd aether-arena/backend
-python -c "from deerflow.config.app_config import AppConfig; print(AppConfig.resolve_config_path())"
+python -c "from aether.config.app_config import AppConfig; print(AppConfig.resolve_config_path())"
 ```
 
 If it can't find the config:

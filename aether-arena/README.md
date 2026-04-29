@@ -1,6 +1,6 @@
 # AetherArena version 2
 
-This repository is the **AetherArena version 2** application line: a workspace for the super-agent harness you run locally or in Docker. Documentation below is **English-only** and focuses on how to configure, run, and extend the system. Historical directory and Python package names (for example `deer-flow/` and `deerflow`) are unchanged so imports, scripts, and tooling keep working.
+This repository is the **AetherArena version 2** application line: a workspace for the super-agent harness you run locally or in Docker. Documentation below is **English-only** and focuses on how to configure, run, and extend the system. Historical directory and Python package names (for example `aether-arena/` and `aether-arena`) are unchanged so imports, scripts, and tooling keep working.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
@@ -46,12 +46,12 @@ https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
 
    ```bash
    git clone https://github.com/PoisedDok/AetherArenaV2.git
-   cd deer-flow
+   cd aether-arena
    ```
 
 2. **Generate local configuration files**
 
-   From the project root directory (`deer-flow/`), run:
+   From the project root directory (`aether-arena/`), run:
 
    ```bash
    make config
@@ -99,14 +99,14 @@ https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
    models:
      - name: gpt-5.4
        display_name: GPT-5.4 (Codex CLI)
-       use: deerflow.models.openai_codex_provider:CodexChatModel
+       use: aether.models.openai_codex_provider:CodexChatModel
        model: gpt-5.4
        supports_thinking: true
        supports_reasoning_effort: true
 
      - name: claude-sonnet-4.6
        display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-       use: deerflow.models.claude_provider:ClaudeChatModel
+       use: aether.models.claude_provider:ClaudeChatModel
        model: claude-sonnet-4-6
        max_tokens: 4096
        supports_thinking: true
@@ -165,7 +165,7 @@ make docker-init    # Pull sandbox image (only once or when image updates)
 make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
 ```
 
-`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: aether.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
 Backend processes automatically pick up `config.yaml` changes on the next config access, so model metadata updates do not require a manual restart during development.
 
 **Production** (builds images locally, mounts runtime config and data):
@@ -186,7 +186,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed Docker development guide.
 
 If you prefer running services locally:
 
-Prerequisite: complete the "Configuration" steps above first (`make config` and model API keys). `make dev` requires a valid configuration file (defaults to `config.yaml` in the project root; can be overridden via `DEER_FLOW_CONFIG_PATH`).
+Prerequisite: complete the "Configuration" steps above first (`make config` and model API keys). `make dev` requires a valid configuration file (defaults to `config.yaml` in the project root; can be overridden via `AETHER_ARENA_CONFIG_PATH`).
 
 1. **Check prerequisites**:
    ```bash
@@ -381,16 +381,16 @@ Gateway-generated follow-up suggestions now normalize both plain-string model ou
 
 #### Claude Code Integration
 
-The `claude-to-deerflow` skill lets you interact with a running AetherArena v2 instance directly from [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Send research tasks, check status, manage threads — all without leaving the terminal.
+The `claude-to-aether-arena` skill lets you interact with a running AetherArena v2 instance directly from [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Send research tasks, check status, manage threads — all without leaving the terminal.
 
 **Install the skill**:
 
 ```bash
-# Run from your clone root; skill id stays claude-to-deerflow for compatibility.
-npx skills add . --skill claude-to-deerflow
+# Run from your clone root; skill id stays claude-to-aether-arena for compatibility.
+npx skills add . --skill claude-to-aether-arena
 ```
 
-Then make sure AetherArena v2 is running (default at `http://localhost:2026`) and use the `/claude-to-deerflow` command in Claude Code.
+Then make sure AetherArena v2 is running (default at `http://localhost:2026`) and use the `/claude-to-aether-arena` command in Claude Code.
 
 **What you can do**:
 - Send messages to AetherArena v2 and get streaming responses
@@ -407,7 +407,7 @@ DEERFLOW_GATEWAY_URL=http://localhost:2026    # Gateway API
 DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
 ```
 
-See [`skills/public/claude-to-deerflow/SKILL.md`](skills/public/claude-to-deerflow/SKILL.md) for the full API reference.
+See [`skills/public/claude-to-aether-arena/SKILL.md`](skills/public/claude-to-aether-arena/SKILL.md) for the full API reference.
 
 ### Sub-Agents
 
@@ -461,7 +461,7 @@ AetherArena v2 is model-agnostic — it works with any LLM that implements the O
 AetherArena v2 can be used as an embedded Python library without running the full HTTP services. The `AetherArenaClient` provides direct in-process access to all agent and Gateway capabilities, returning the same response schemas as the HTTP Gateway API:
 
 ```python
-from deerflow.client import AetherArenaClient
+from aether.client import AetherArenaClient
 
 client = AetherArenaClient()
 
@@ -480,7 +480,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/deerflow/client.py` for full API documentation.
+All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/aether-arena/client.py` for full API documentation.
 
 ## Documentation
 
@@ -501,9 +501,9 @@ This project is open source and available under the [MIT License](./LICENSE).
 
 ## Acknowledgments
 
-This project started from the **AetherArena** open-source agent harness (originally by [ByteDance](https://github.com/bytedance/deer-flow), MIT licensed). We forked their excellent foundation and rebranded it for our own roadmap while keeping all technical documentation intact.
+**AetherArena** by [PoisedDok](https://github.com/PoisedDok/AetherArenaV2) is a fork of **[DeerFlow](https://github.com/bytedance/deer-flow)** by ByteDance, released under the MIT License. We forked their excellent open-source agent harness and rebranded it for our own roadmap. All credit for the foundational architecture — the LangGraph agent system, middleware chain, sandbox execution, MCP integration, and skills framework — belongs to the DeerFlow team.
 
-**Thanks to the original AetherArena contributors:**
+**Thanks to the original DeerFlow contributors:**
 - [Daniel Walnut](https://github.com/hetaoBackend/)
 - [Henry Li](https://github.com/magiccube/)
 - All 80+ community contributors who built the skills, middleware, and tooling we inherited.
@@ -511,5 +511,3 @@ This project started from the **AetherArena** open-source agent harness (origina
 **Foundational dependencies:**
 - **[LangChain](https://github.com/langchain-ai/langchain)** — LLM integration and tooling.
 - **[LangGraph](https://github.com/langchain-ai/langgraph)** — graph-based agent orchestration.
-
-*Note:* Directory names (`deer-flow/`, `deerflow` Python package) and internal class names (`AetherArenaClient`) remain unchanged to preserve import paths and compatibility with existing scripts.

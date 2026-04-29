@@ -109,7 +109,7 @@ def _create_todo_list_middleware(is_plan_mode: bool) -> TodoMiddleware | None:
     if not is_plan_mode:
         return None
 
-    # Custom prompts matching DeerFlow's style
+    # Custom prompts matching AetherArena's style
     system_prompt = """
 <todo_list_system>
 You have access to the `write_todos` tool to help you manage and track complex multi-step objectives.
@@ -239,7 +239,7 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     if summarization_middleware is not None:
         middlewares.append(summarization_middleware)
 
-    # Add auto-compact middleware (deer-flow native, runs after SummarizationMiddleware)
+    # Add auto-compact middleware (aether-arena native, runs after SummarizationMiddleware)
     middlewares.append(CompactMiddleware())
 
     # Add TodoList middleware if plan mode is enabled

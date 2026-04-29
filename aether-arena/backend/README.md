@@ -76,7 +76,7 @@ Per-thread isolated execution with virtual path translation:
 - **Abstract interface**: `execute_command`, `read_file`, `write_file`, `list_dir`
 - **Providers**: `LocalSandboxProvider` (filesystem) and `AioSandboxProvider` (Docker, in community/)
 - **Virtual paths**: `/mnt/user-data/{workspace,uploads,outputs}` → thread-specific physical directories
-- **Skills path**: `/mnt/skills` → `deer-flow/skills/` directory
+- **Skills path**: `/mnt/skills` → `aether-arena/skills/` directory
 - **Skills loading**: Recursively discovers nested `SKILL.md` files under `skills/{public,custom}` and preserves nested container paths
 - **Tools**: `bash`, `ls`, `read_file`, `write_file`, `str_replace`
 
@@ -146,7 +146,7 @@ For Feishu card updates, AetherArena stores the running card's `message_id` per 
 ### Installation
 
 ```bash
-cd deer-flow
+cd aether-arena
 
 # Copy configuration files
 cp config.example.yaml config.yaml
@@ -306,8 +306,8 @@ MCP servers and skill states in a single file:
 
 ### Environment Variables
 
-- `DEER_FLOW_CONFIG_PATH` - Override config.yaml location
-- `DEER_FLOW_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location
+- `AETHER_ARENA_CONFIG_PATH` - Override config.yaml location
+- `AETHER_ARENA_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location
 - Model API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.
 - Tool API keys: `TAVILY_API_KEY`, `GITHUB_TOKEN`, etc.
 

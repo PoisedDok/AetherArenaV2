@@ -45,7 +45,7 @@ class LocalContainerBackend(SandboxBackend):
         Args:
             image: Container image to use.
             base_port: Base port number to start searching for free ports.
-            container_prefix: Prefix for container names (e.g., "deer-flow-sandbox").
+            container_prefix: Prefix for container names (e.g., "aether-arena-sandbox").
             config_mounts: Volume mount configurations from config (list of VolumeMountConfig).
             environment: Environment variables to inject into containers.
         """
@@ -142,7 +142,7 @@ class LocalContainerBackend(SandboxBackend):
 
         # When running inside Docker (DooD), sandbox containers are reachable via
         # host.docker.internal rather than localhost (they run on the host daemon).
-        sandbox_host = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        sandbox_host = os.environ.get("AETHER_ARENA_SANDBOX_HOST", "localhost")
         return SandboxInfo(
             sandbox_id=sandbox_id,
             sandbox_url=f"http://{sandbox_host}:{port}",
@@ -191,7 +191,7 @@ class LocalContainerBackend(SandboxBackend):
         if port is None:
             return None
 
-        sandbox_host = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        sandbox_host = os.environ.get("AETHER_ARENA_SANDBOX_HOST", "localhost")
         sandbox_url = f"http://{sandbox_host}:{port}"
         if not wait_for_sandbox_ready(sandbox_url, timeout=5):
             return None

@@ -285,7 +285,7 @@ class TelegramChannel(Channel):
         user_id = str(update.effective_user.id)
         msg_id = str(update.message.message_id)
 
-        # topic_id determines which DeerFlow thread the message maps to.
+        # topic_id determines which AetherArena thread the message maps to.
         # In private chats, use None so that all messages share a single
         # thread (the store key becomes "channel:chat_id").
         # In group chats, use the reply-to message id or the current

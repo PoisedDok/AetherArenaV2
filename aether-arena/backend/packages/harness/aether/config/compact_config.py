@@ -1,4 +1,4 @@
-"""Configuration for the deer-flow conversation compact system."""
+"""Configuration for the aether-arena conversation compact system."""
 
 from pydantic import BaseModel, Field
 

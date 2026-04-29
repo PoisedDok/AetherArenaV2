@@ -1,4 +1,4 @@
-"""Compact prompts for deer-flow conversation summarization.
+"""Compact prompts for aether-arena conversation summarization.
 
 Intentionally plain-text: no XML tags, no NO_TOOLS preamble.
 Local/small models (Ministral-3B, etc.) produce empty output when the

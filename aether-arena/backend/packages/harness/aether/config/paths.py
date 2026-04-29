@@ -10,7 +10,7 @@ _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 class Paths:
     """
-    Centralized path configuration for DeerFlow application data.
+    Centralized path configuration for AetherArena application data.
 
     Directory layout (host side):
         {base_dir}/
@@ -30,9 +30,9 @@ class Paths:
 
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
-        2. DEER_FLOW_HOME environment variable
-        3. Local dev fallback: cwd/.deer-flow  (when cwd is the backend/ dir)
-        4. Default: $HOME/.deer-flow
+        2. AETHER_ARENA_HOME environment variable
+        3. Local dev fallback: cwd/.aether-arena  (when cwd is the backend/ dir)
+        4. Default: $HOME/.aether-arena
     """
 
     def __init__(self, base_dir: str | Path | None = None) -> None:
@@ -44,12 +44,12 @@ class Paths:
 
         When running inside Docker with a mounted Docker socket (DooD), the Docker
         daemon runs on the host and resolves mount paths against the host filesystem.
-        Set DEER_FLOW_HOST_BASE_DIR to the host-side path that corresponds to this
+        Set AETHER_ARENA_HOST_BASE_DIR to the host-side path that corresponds to this
         container's base_dir so that sandbox container volume mounts work correctly.
 
         Falls back to base_dir when the env var is not set (native/local execution).
         """
-        if env := os.getenv("DEER_FLOW_HOST_BASE_DIR"):
+        if env := os.getenv("AETHER_ARENA_HOST_BASE_DIR"):
             return Path(env)
         return self.base_dir
 
@@ -59,14 +59,14 @@ class Paths:
         if self._base_dir is not None:
             return self._base_dir
 
-        if env_home := os.getenv("DEER_FLOW_HOME"):
+        if env_home := os.getenv("AETHER_ARENA_HOME"):
             return Path(env_home).resolve()
 
         cwd = Path.cwd()
         if cwd.name == "backend" or (cwd / "pyproject.toml").exists():
-            return cwd / ".deer-flow"
+            return cwd / ".aether-arena"
 
-        return Path.home() / ".deer-flow"
+        return Path.home() / ".aether-arena"
 
     @property
     def memory_file(self) -> Path:

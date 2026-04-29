@@ -3,7 +3,7 @@
 # Guidelines:
 # - Copy this file to `config.yaml` and customize it for your environment
 # - The default path of this configuration file is `config.yaml` in the current working directory.
-#   However you can change it using the `DEER_FLOW_CONFIG_PATH` environment variable.
+#   However you can change it using the `AETHER_ARENA_CONFIG_PATH` environment variable.
 # - Environment variables are available for all field values. Example: `api_key: $OPENAI_API_KEY`
 # - The `use` path is a string that looks like "package_name.sub_package_name.module_name:class_name/variable_name".
 
@@ -23,7 +23,7 @@ models:
   # Example: Volcengine (Doubao) model
   # - name: doubao-seed-1.8
   #   display_name: Doubao-Seed-1.8
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: aether.models.patched_deepseek:PatchedChatDeepSeek
   #   model: doubao-seed-1-8-251228
   #   api_base: https://ark.cn-beijing.volces.com/api/v3
   #   api_key: $VOLCENGINE_API_KEY
@@ -79,7 +79,7 @@ models:
   # Example: DeepSeek model (with thinking support)
   # - name: deepseek-v3
   #   display_name: DeepSeek V3 (Thinking)
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: aether.models.patched_deepseek:PatchedChatDeepSeek
   #   model: deepseek-reasoner
   #   api_key: $DEEPSEEK_API_KEY
   #   max_tokens: 16384
@@ -93,7 +93,7 @@ models:
   # Example: Kimi K2.5 model
   # - name: kimi-k2.5
   #   display_name: Kimi K2.5
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: aether.models.patched_deepseek:PatchedChatDeepSeek
   #   model: kimi-k2.5
   #   api_base: https://api.moonshot.cn/v1
   #   api_key: $MOONSHOT_API_KEY
@@ -161,7 +161,7 @@ models:
   # Use PatchedChatOpenAI to extract reasoning_content from Qwen, local models, etc.
   # - name: lmstudio-qwen-thinking
   #   display_name: Qwen Thinking (LM Studio)
-  #   use: deerflow.models.patched_openai:PatchedChatOpenAI
+  #   use: aether.models.patched_openai:PatchedChatOpenAI
   #   model: qwen/qwen3-4b-thinking-2507
   #   api_key: lm-studio  # LM Studio accepts any key
   #   base_url: http://localhost:1234/v1
@@ -188,34 +188,34 @@ tools:
   # Web search via self-hosted SearXNG (AGPL-3.0). Set SEARXNG_URL: Docker http://searxng:8080; host→published port e.g. http://127.0.0.1:2030
   - name: web_search
     group: web
-    use: deerflow.community.searxng.tools:web_search_tool
+    use: aether.community.searxng.tools:web_search_tool
     max_results: 8
     url: $SEARXNG_URL
 
   # Web search tool (Tavily — requires TAVILY_API_KEY)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.tavily.tools:web_search_tool
+  #   use: aether.community.tavily.tools:web_search_tool
   #   max_results: 5
   #   # api_key: $TAVILY_API_KEY
 
   # Web search tool (uses InfoQuest, requires InfoQuest API key)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.infoquest.tools:web_search_tool
+  #   use: aether.community.infoquest.tools:web_search_tool
   #   # Used to limit the scope of search results, only returns content within the specified time range. Set to -1 to disable time filtering
   #   search_time_range: 10
 
   # Web fetch tool — self-hosted via SearXNG (zero cloud dependencies)
   - name: web_fetch
     group: web
-    use: deerflow.community.searxng.tools:web_fetch_tool
+    use: aether.community.searxng.tools:web_fetch_tool
     timeout: 10
 
   # Web fetch tool (uses InfoQuest)
   # - name: web_fetch
   #   group: web
-  #   use: deerflow.community.infoquest.tools:web_fetch_tool
+  #   use: aether.community.infoquest.tools:web_fetch_tool
   #   # Overall timeout for the entire crawling process (in seconds). Set to positive value to enable, -1 to disable
   #   timeout: 10
   #   # Waiting time after page loading (in seconds). Set to positive value to enable, -1 to disable
@@ -227,13 +227,13 @@ tools:
   # Use this to find reference images before image generation
   - name: image_search
     group: web
-    use: deerflow.community.image_search.tools:image_search_tool
+    use: aether.community.image_search.tools:image_search_tool
     max_results: 5
 
   # Image search tool (uses InfoQuest)
   # - name: image_search
   #   group: web
-  #   use: deerflow.community.infoquest.tools:image_search_tool
+  #   use: aether.community.infoquest.tools:image_search_tool
   #   # Used to limit the scope of image search results, only returns content within the specified time range. Set to -1 to disable time filtering
   #   image_search_time_range: 10
   #   # Image size filter. Options: "l" (large), "m" (medium), "i" (icon).
@@ -242,24 +242,24 @@ tools:
   # File operations tools
   - name: ls
     group: file:read
-    use: deerflow.sandbox.tools:ls_tool
+    use: aether.sandbox.tools:ls_tool
 
   - name: read_file
     group: file:read
-    use: deerflow.sandbox.tools:read_file_tool
+    use: aether.sandbox.tools:read_file_tool
 
   - name: write_file
     group: file:write
-    use: deerflow.sandbox.tools:write_file_tool
+    use: aether.sandbox.tools:write_file_tool
 
   - name: str_replace
     group: file:write
-    use: deerflow.sandbox.tools:str_replace_tool
+    use: aether.sandbox.tools:str_replace_tool
 
   # Bash execution tool
   - name: bash
     group: bash
-    use: deerflow.sandbox.tools:bash_tool
+    use: aether.sandbox.tools:bash_tool
 
 # ============================================================================
 # Tool Search Configuration (Deferred Tool Loading)
@@ -281,7 +281,7 @@ tool_search:
 # Option 1: Local Sandbox (Default)
 # Executes commands directly on the host machine
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: aether.sandbox.local:LocalSandboxProvider
 
 # Option 2: Container-based AIO Sandbox
 # Executes commands in isolated containers (Docker or Apple Container)
@@ -289,7 +289,7 @@ sandbox:
 # On other platforms: Uses Docker
 # Uncomment to use:
 # sandbox:
-#   use: deerflow.community.aio_sandbox:AioSandboxProvider
+#   use: aether.community.aio_sandbox:AioSandboxProvider
 #
 #   # Optional: Container image to use (works with both Docker and Apple Container)
 #   # Default: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
@@ -304,8 +304,8 @@ sandbox:
 #   # make room for new ones. Use a positive integer here; omit this field to use the default.
 #   # replicas: 3
 #
-#   # Optional: Prefix for container names (default: deer-flow-sandbox)
-#   # container_prefix: deer-flow-sandbox
+#   # Optional: Prefix for container names (default: aether-arena-sandbox)
+#   # container_prefix: aether-arena-sandbox
 #
 #   # Optional: Additional mount directories from host to container
 #   # NOTE: Skills directory is automatically mounted from skills.path to skills.container_path
@@ -327,7 +327,7 @@ sandbox:
 # Each sandbox_id gets a dedicated Pod in k3s, managed by the provisioner.
 # Recommended for production or advanced users who want better isolation and scalability.:
 # sandbox:
-#   use: deerflow.community.aio_sandbox:AioSandboxProvider
+#   use: aether.community.aio_sandbox:AioSandboxProvider
 #   provisioner_url: http://provisioner:8002
 
 # ============================================================================
@@ -468,7 +468,7 @@ checkpointer:
 # PostgreSQL (multi-process, production):
 # checkpointer:
 #   type: postgres
-#   connection_string: postgresql://user:password@localhost:5432/deerflow
+#   connection_string: postgresql://user:password@localhost:5432/aether-arena
 
 # ============================================================================
 # IM Channels Configuration
@@ -538,14 +538,14 @@ checkpointer:
 # guardrails:
 #   enabled: true
 #   provider:
-#     use: deerflow.guardrails.builtin:AllowlistProvider
+#     use: aether.guardrails.builtin:AllowlistProvider
 #     config:
 #       denied_tools: ["bash", "write_file"]
 
 # --- Option 2: OAP passport provider (open standard, any implementation) ---
 #   The Open Agent Passport (OAP) spec defines passport format and decision codes.
 #   Any OAP-compliant provider works. Example using APort (reference implementation):
-#     pip install aport-agent-guardrails && aport setup --framework deerflow
+#     pip install aport-agent-guardrails && aport setup --framework aether-arena
 # guardrails:
 #   enabled: true
 #   provider:

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Default configuration
 DEFAULT_IMAGE = "enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest"
 DEFAULT_PORT = 8080
-DEFAULT_CONTAINER_PREFIX = "deer-flow-sandbox"
+DEFAULT_CONTAINER_PREFIX = "aether-arena-sandbox"
 DEFAULT_IDLE_TIMEOUT = 600  # 10 minutes in seconds
 DEFAULT_REPLICAS = 3  # Maximum concurrent sandbox containers
 IDLE_CHECK_INTERVAL = 60  # Check every 60 seconds
@@ -54,7 +54,7 @@ class AioSandboxProvider(SandboxProvider):
         use: aether.community.aio_sandbox:AioSandboxProvider
         image: <container image>
         port: 8080                      # Base port for local containers
-        container_prefix: deer-flow-sandbox
+        container_prefix: aether-arena-sandbox
         idle_timeout: 600               # Idle timeout in seconds (0 to disable)
         replicas: 3                     # Max concurrent sandbox containers (LRU eviction when exceeded)
         mounts:                         # Volume mounts for local containers
@@ -191,7 +191,7 @@ class AioSandboxProvider(SandboxProvider):
         paths = get_paths()
         paths.ensure_thread_dirs(thread_id)
 
-        # host_paths resolves to the host-side base dir when DEER_FLOW_HOST_BASE_DIR
+        # host_paths resolves to the host-side base dir when AETHER_ARENA_HOST_BASE_DIR
         # is set, otherwise falls back to the container's own base dir (native mode).
         host_paths = Paths(base_dir=paths.host_base_dir)
 
@@ -205,7 +205,7 @@ class AioSandboxProvider(SandboxProvider):
     def _get_skills_mount() -> tuple[str, str, bool] | None:
         """Get the skills directory mount configuration.
 
-        Mount source uses DEER_FLOW_HOST_SKILLS_PATH when running inside Docker (DooD)
+        Mount source uses AETHER_ARENA_HOST_SKILLS_PATH when running inside Docker (DooD)
         so the host Docker daemon can resolve the path.
         """
         try:
@@ -215,7 +215,7 @@ class AioSandboxProvider(SandboxProvider):
 
             if skills_path.exists():
                 # When running inside Docker with DooD, use host-side skills path.
-                host_skills = os.environ.get("DEER_FLOW_HOST_SKILLS_PATH") or str(skills_path)
+                host_skills = os.environ.get("AETHER_ARENA_HOST_SKILLS_PATH") or str(skills_path)
                 return (host_skills, container_path, True)  # Read-only for security
         except Exception as e:
             logger.warning(f"Could not setup skills mount: {e}")

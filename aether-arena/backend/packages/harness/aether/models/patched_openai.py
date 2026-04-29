@@ -8,7 +8,7 @@ different formats that standard ``langchain_openai.ChatOpenAI`` ignores:
 - Inline ``...\n<think>`` or ``<thinking>`` tags in content
 
 This adapter extracts reasoning from supported formats and maps them into
-``additional_kwargs.reasoning_content`` which DeerFlow's frontend expects.
+``additional_kwargs.reasoning_content`` which AetherArena's frontend expects.
 """
 
 from __future__ import annotations

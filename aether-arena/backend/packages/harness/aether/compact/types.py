@@ -1,4 +1,4 @@
-"""Types for the deer-flow conversation compaction system."""
+"""Types for the aether-arena conversation compaction system."""
 
 from dataclasses import dataclass
 from enum import Enum

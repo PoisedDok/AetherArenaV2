@@ -1,4 +1,4 @@
-"""Auto-compact middleware for the deer-flow agent system.
+"""Auto-compact middleware for the aether-arena agent system.
 
 Hooks into `before_model` to check whether the conversation has grown too large,
 and compacts it in-place if so.  The result is returned as a state update so

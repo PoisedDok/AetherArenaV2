@@ -10,7 +10,7 @@ A minimal Electron shell that loads the web UI from `http://localhost:2026`. It 
 
 1. **Stack running** (Docker or local `make` flow) so `http://localhost:2026` responds.
    ```bash
-   cd /path/to/deer-flow
+   cd /path/to/aether-arena
    make docker-start
    ```
 
@@ -89,4 +89,4 @@ Expect `{"status":"healthy"}` (or equivalent).
 
 ## Note on repo layout
 
-The repository directory is still named `deer-flow` for compatibility with existing scripts and Python imports (`deerflow` package).
+The repository directory is still named `aether-arena` for compatibility with existing scripts and Python imports (`aether-arena` package).

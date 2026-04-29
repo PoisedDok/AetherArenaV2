@@ -17,9 +17,9 @@ from aether.sandbox.tools import (
 )
 
 _THREAD_DATA = {
-    "workspace_path": "/tmp/deer-flow/threads/t1/user-data/workspace",
-    "uploads_path": "/tmp/deer-flow/threads/t1/user-data/uploads",
-    "outputs_path": "/tmp/deer-flow/threads/t1/user-data/outputs",
+    "workspace_path": "/tmp/aether-arena/threads/t1/user-data/workspace",
+    "uploads_path": "/tmp/aether-arena/threads/t1/user-data/uploads",
+    "outputs_path": "/tmp/aether-arena/threads/t1/user-data/outputs",
 }
 
 
@@ -29,19 +29,19 @@ _THREAD_DATA = {
 def test_replace_virtual_path_maps_virtual_root_and_subpaths() -> None:
     assert (
         Path(replace_virtual_path("/mnt/user-data/workspace/a.txt", _THREAD_DATA)).as_posix()
-        == "/tmp/deer-flow/threads/t1/user-data/workspace/a.txt"
+        == "/tmp/aether-arena/threads/t1/user-data/workspace/a.txt"
     )
-    assert Path(replace_virtual_path("/mnt/user-data", _THREAD_DATA)).as_posix() == "/tmp/deer-flow/threads/t1/user-data"
+    assert Path(replace_virtual_path("/mnt/user-data", _THREAD_DATA)).as_posix() == "/tmp/aether-arena/threads/t1/user-data"
 
 
 # ---------- mask_local_paths_in_output ----------
 
 
 def test_mask_local_paths_in_output_hides_host_paths() -> None:
-    output = "Created: /tmp/deer-flow/threads/t1/user-data/workspace/result.txt"
+    output = "Created: /tmp/aether-arena/threads/t1/user-data/workspace/result.txt"
     masked = mask_local_paths_in_output(output, _THREAD_DATA)
 
-    assert "/tmp/deer-flow/threads/t1/user-data" not in masked
+    assert "/tmp/aether-arena/threads/t1/user-data" not in masked
     assert "/mnt/user-data/workspace/result.txt" in masked
 
 
@@ -49,12 +49,12 @@ def test_mask_local_paths_in_output_hides_skills_host_paths() -> None:
     """Skills host paths in bash output should be masked to virtual paths."""
     with (
         patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/aether-arena/skills"),
     ):
-        output = "Reading: /home/user/deer-flow/skills/public/bootstrap/SKILL.md"
+        output = "Reading: /home/user/aether-arena/skills/public/bootstrap/SKILL.md"
         masked = mask_local_paths_in_output(output, _THREAD_DATA)
 
-        assert "/home/user/deer-flow/skills" not in masked
+        assert "/home/user/aether-arena/skills" not in masked
         assert "/mnt/skills/public/bootstrap/SKILL.md" in masked
 
 
@@ -137,20 +137,20 @@ def test_resolve_skills_path_resolves_correctly() -> None:
     """Skills virtual path should resolve to host path."""
     with (
         patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/aether-arena/skills"),
     ):
         resolved = _resolve_skills_path("/mnt/skills/public/bootstrap/SKILL.md")
-        assert resolved == "/home/user/deer-flow/skills/public/bootstrap/SKILL.md"
+        assert resolved == "/home/user/aether-arena/skills/public/bootstrap/SKILL.md"
 
 
 def test_resolve_skills_path_resolves_root() -> None:
     """Skills container root should resolve to host skills directory."""
     with (
         patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/aether-arena/skills"),
     ):
         resolved = _resolve_skills_path("/mnt/skills")
-        assert resolved == "/home/user/deer-flow/skills"
+        assert resolved == "/home/user/aether-arena/skills"
 
 
 def test_resolve_skills_path_raises_when_not_configured() -> None:
@@ -200,12 +200,12 @@ def test_replace_virtual_paths_in_command_replaces_skills_paths() -> None:
     """Skills virtual paths in commands should be resolved to host paths."""
     with (
         patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/aether-arena/skills"),
     ):
         cmd = "cat /mnt/skills/public/bootstrap/SKILL.md"
         result = replace_virtual_paths_in_command(cmd, _THREAD_DATA)
         assert "/mnt/skills" not in result
-        assert "/home/user/deer-flow/skills/public/bootstrap/SKILL.md" in result
+        assert "/home/user/aether-arena/skills/public/bootstrap/SKILL.md" in result
 
 
 def test_replace_virtual_paths_in_command_replaces_both() -> None:
@@ -219,7 +219,7 @@ def test_replace_virtual_paths_in_command_replaces_both() -> None:
         assert "/mnt/skills" not in result
         assert "/mnt/user-data" not in result
         assert "/home/user/skills/public/SKILL.md" in result
-        assert "/tmp/deer-flow/threads/t1/user-data/workspace/out.txt" in result
+        assert "/tmp/aether-arena/threads/t1/user-data/workspace/out.txt" in result
 
 
 # ---------- validate_local_bash_command_paths ----------

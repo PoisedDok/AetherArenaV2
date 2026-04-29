@@ -36,8 +36,8 @@ models:
 - OpenAI (`langchain_openai:ChatOpenAI`)
 - Anthropic (`langchain_anthropic:ChatAnthropic`)
 - DeepSeek (`langchain_deepseek:ChatDeepSeek`)
-- Claude Code OAuth (`deerflow.models.claude_provider:ClaudeChatModel`)
-- Codex CLI (`deerflow.models.openai_codex_provider:CodexChatModel`)
+- Claude Code OAuth (`aether.models.claude_provider:ClaudeChatModel`)
+- Codex CLI (`aether.models.openai_codex_provider:CodexChatModel`)
 - Any LangChain-compatible provider
 
 CLI-backed provider examples:
@@ -46,14 +46,14 @@ CLI-backed provider examples:
 models:
   - name: gpt-5.4
     display_name: GPT-5.4 (Codex CLI)
-    use: deerflow.models.openai_codex_provider:CodexChatModel
+    use: aether.models.openai_codex_provider:CodexChatModel
     model: gpt-5.4
     supports_thinking: true
     supports_reasoning_effort: true
 
   - name: claude-sonnet-4.6
     display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-    use: deerflow.models.claude_provider:ClaudeChatModel
+    use: aether.models.claude_provider:ClaudeChatModel
     model: claude-sonnet-4-6
     max_tokens: 4096
     supports_thinking: true
@@ -156,7 +156,7 @@ Configure specific tools available to the agent:
 tools:
   - name: web_search
     group: web
-    use: deerflow.community.tavily.tools:web_search_tool
+    use: aether.community.tavily.tools:web_search_tool
     max_results: 5
     # api_key: $TAVILY_API_KEY  # Optional
 ```
@@ -177,13 +177,13 @@ AetherArena supports multiple sandbox execution modes. Configure your preferred 
 **Local Execution** (runs sandbox code directly on the host machine):
 ```yaml
 sandbox:
-   use: deerflow.sandbox.local:LocalSandboxProvider # Local execution
+   use: aether.sandbox.local:LocalSandboxProvider # Local execution
 ```
 
 **Docker Execution** (runs sandbox code in isolated Docker containers):
 ```yaml
 sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
+   use: aether.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
 ```
 
 **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service):
@@ -192,7 +192,7 @@ This mode runs each sandbox in an isolated Kubernetes Pod on your **host machine
 
 ```yaml
 sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider
+   use: aether.community.aio_sandbox:AioSandboxProvider
    provisioner_url: http://provisioner:8002
 ```
 
@@ -205,13 +205,13 @@ Choose between local execution or Docker-based isolation:
 **Option 1: Local Sandbox** (default, simpler setup):
 ```yaml
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: aether.sandbox.local:LocalSandboxProvider
 ```
 
 **Option 2: Docker Sandbox** (isolated, more secure):
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: aether.community.aio_sandbox:AioSandboxProvider
   port: 8080
   auto_start: true
   container_prefix: aether-arena-sandbox
@@ -269,7 +269,7 @@ models:
 - `DEEPSEEK_API_KEY` - DeepSeek API key
 - `NOVITA_API_KEY` - Novita API key (OpenAI-compatible endpoint)
 - `TAVILY_API_KEY` - Tavily search API key
-- `DEER_FLOW_CONFIG_PATH` - Custom config file path
+- `AETHER_ARENA_CONFIG_PATH` - Custom config file path
 
 ## Configuration Location
 
@@ -280,7 +280,7 @@ The configuration file should be placed in the **project root directory** (`aeth
 AetherArena searches for configuration in this order:
 
 1. Path specified in code via `config_path` argument
-2. Path from `DEER_FLOW_CONFIG_PATH` environment variable
+2. Path from `AETHER_ARENA_CONFIG_PATH` environment variable
 3. `config.yaml` in current working directory (typically `backend/` when running)
 4. `config.yaml` in parent directory (project root: `aether-arena/`)
 
@@ -298,7 +298,7 @@ AetherArena searches for configuration in this order:
 ### "Config file not found"
 - Ensure `config.yaml` exists in the **project root** directory (`aether-arena/config.yaml`)
 - The backend searches parent directory by default, so root location is preferred
-- Alternatively, set `DEER_FLOW_CONFIG_PATH` environment variable to custom location
+- Alternatively, set `AETHER_ARENA_CONFIG_PATH` environment variable to custom location
 
 ### "Invalid API key"
 - Verify environment variables are set correctly

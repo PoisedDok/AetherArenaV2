@@ -6,7 +6,7 @@
  * the full chain and display the complete history.
  *
  * Key schema:
- *   deerflow.thread-chain.{thread_id}  →  ThreadChainEntry
+ *   aether-arena.thread-chain.{thread_id}  →  ThreadChainEntry
  */
 
 const KEY_PREFIX = "aether-arena.thread-chain.";
