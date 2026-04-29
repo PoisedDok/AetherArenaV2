@@ -1,6 +1,6 @@
 # AetherArena v2
 
-**AetherArena v2** is a super-agent harness you run locally or in Docker — a complete runtime that gives AI agents a filesystem, long-term memory, skills, sandboxed execution, and the ability to plan and delegate to sub-agents.
+**AetherArena v2** is a privacy-first personal AI assistant platform you run locally or in Docker. Your assistant knows you, remembers you across sessions, and can do real work — browse the web, write and run code, manage files, generate documents — all on your hardware, under your control.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
@@ -21,7 +21,7 @@
       - [Sandbox Mode](#sandbox-mode)
       - [MCP Server](#mcp-server)
       - [IM Channels](#im-channels)
-  - [From Deep Research to Super Agent Harness](#from-deep-research-to-super-agent-harness)
+  - [A personal assistant that's actually yours](#a-personal-assistant-thats-actually-yours)
   - [Core Features](#core-features)
     - [Skills \& Tools](#skills--tools)
       - [Claude Code Integration](#claude-code-integration)
@@ -336,17 +336,15 @@ Once a channel is connected, you can interact with AetherArena v2 directly from 
 
 > Messages without a command prefix are treated as regular chat — AetherArena v2 creates a thread and responds conversationally.
 
-## From Deep Research to Super Agent Harness
+## A personal assistant that's actually yours
 
-AetherArena v2 started as a Deep Research framework — and the community ran with it. Since launch, developers have pushed it far beyond research: building data pipelines, generating slide decks, spinning up dashboards, automating content workflows. Things we never anticipated.
+Most AI assistants are products someone else controls — their servers, their data policies, their limits. AetherArena is different. It runs on your machine, uses whatever models you choose, and keeps every conversation and memory file local.
 
-That told us something important: AetherArena v2 wasn't just a research tool. It was a **harness** — a runtime that gives agents the infrastructure to actually get work done.
+It's designed to feel personal because it is personal. AetherArena learns your preferences, writing style, and recurring workflows across sessions. The more you use it, the more it knows you — and the less you have to repeat yourself.
 
-So we rebuilt it from scratch.
+It's also genuinely capable. Not "chat and copy-paste" capable. AetherArena has a real execution environment: it searches the web, runs code, edits files, generates documents, and can spawn parallel sub-tasks for complex, long-running work. All within a sandboxed environment that can't touch the rest of your system unless you let it.
 
-AetherArena v2 is no longer a framework you wire together. It's a super agent harness — batteries included, fully extensible. Built on LangGraph and LangChain, it ships with everything an agent needs out of the box: a filesystem, memory, skills, sandboxed execution, and the ability to plan and spawn sub-agents for complex, multi-step tasks.
-
-Use it as-is. Or tear it apart and make it yours.
+Privacy-first. Personalised. Powerful.
 
 ## Core Features
 
@@ -499,7 +497,7 @@ This project is open source and available under the [MIT License](./LICENSE).
 
 ## Acknowledgments
 
-**AetherArena** by [PoisedDok](https://github.com/PoisedDok/AetherArenaV2) is a fork of **[DeerFlow](https://github.com/bytedance/deer-flow)** by ByteDance, released under the MIT License. We forked their excellent open-source agent harness and rebranded it for our own roadmap. All credit for the foundational architecture — the LangGraph agent system, middleware chain, sandbox execution, MCP integration, and skills framework — belongs to the DeerFlow team.
+**AetherArena** by [PoisedDok](https://github.com/PoisedDok/AetherArenaV2) is a fork of **[DeerFlow](https://github.com/bytedance/deer-flow)** by ByteDance, released under the MIT License. We forked their open-source agent platform and built our own privacy-first personal assistant on top. All credit for the foundational architecture — LangGraph agent system, middleware chain, sandbox execution, MCP integration, and skills framework — belongs to the DeerFlow team.
 
 **Thanks to the original DeerFlow contributors:**
 - [Daniel Walnut](https://github.com/hetaoBackend/)
