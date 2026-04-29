@@ -60,7 +60,7 @@ class OpenRouterModelsResponse(BaseModel):
 
 # ── Local provider probe ──────────────────────────────────────────────────────
 
-_LOCAL_HOST = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+_LOCAL_HOST = os.environ.get("AETHER_ARENA_SANDBOX_HOST", "localhost")
 
 _LOCAL_PROVIDERS: dict[str, str] = {
     "lmstudio": f"http://{_LOCAL_HOST}:1234",

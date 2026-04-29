@@ -23,9 +23,9 @@ export function WindowTitlebar() {
   useEffect(() => {
     const api = (
       window as unknown as {
-        deerflowDesktop?: { isElectron?: boolean; platform?: string };
+        aetherArenaDesktop?: { isElectron?: boolean; platform?: string };
       }
-    ).deerflowDesktop;
+    ).aetherArenaDesktop;
     if (api?.isElectron && api?.platform === "darwin") {
       setIsElectron(true);
     }

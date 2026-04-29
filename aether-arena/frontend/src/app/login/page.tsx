@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { authClient } from "@/server/better-auth/client";
-import type { AetherArenaDesktopBridge } from "@/types/deerflow-desktop";
+import type { AetherArenaDesktopBridge } from "@/types/aether-arena-desktop";
 
 const CREDENTIAL_KEY = "aether_arena_credentials";
 

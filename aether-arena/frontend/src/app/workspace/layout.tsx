@@ -19,7 +19,7 @@ export default function WorkspaceLayout({
   const [open, setOpen] = useState(false); // SSR default: closed (matches server render)
   useLayoutEffect(() => {
     // Detect Electron on macOS and apply traffic-light safe area class
-    const api = (window as unknown as { deerflowDesktop?: { isElectron?: boolean; platform?: string; glassBackgroundMode?: string } }).deerflowDesktop;
+    const api = (window as unknown as { aetherArenaDesktop?: { isElectron?: boolean; platform?: string; glassBackgroundMode?: string } }).aetherArenaDesktop;
     if (api?.isElectron && api?.platform === 'darwin') {
       document.documentElement.classList.add('electron-darwin');
     }
