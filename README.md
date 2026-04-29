@@ -2,7 +2,7 @@
 
 **AetherArena v2** is a privacy-first personal AI assistant platform built by [PoisedDok](https://github.com/PoisedDok). Your assistant runs locally — on your hardware, with your models, under your control. No data leaves your machine unless you choose it to.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./aether-arena/LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](./aether-arena/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./aether-arena/backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./aether-arena/Makefile)
 
@@ -91,7 +91,7 @@ make desktop-dev   # requires backend running via make dev
 
 ## License
 
-MIT — see [`aether-arena/LICENSE`](./aether-arena/LICENSE).
+BUSL-1.1 — free for personal, non-commercial, and development use. Converts to Apache 2.0 on 2029-11-21. See [`aether-arena/LICENSE`](./aether-arena/LICENSE) for full terms and commercial licensing contact.
 
 ---
 

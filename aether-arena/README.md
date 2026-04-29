@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](./LICENSE)
 
 ---
 
@@ -454,7 +454,11 @@ Regression coverage includes Docker sandbox mode detection and provisioner kubec
 
 ## License
 
-This project is open source and available under the [MIT License](./LICENSE).
+AetherArena v2 is licensed under the **Business Source License 1.1 (BUSL-1.1)** — free for personal, non-commercial, and development use. Converts to Apache 2.0 on 2029-11-21. See [LICENSE](./LICENSE) for full terms.
+
+For commercial licensing: krish@aetherinc.xyz
+
+The upstream DeerFlow code this project is derived from remains under the MIT License — see the "Upstream Attribution" section of [LICENSE](./LICENSE).
 
 ## Acknowledgments
 
