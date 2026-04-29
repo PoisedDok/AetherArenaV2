@@ -17,7 +17,6 @@ import {
   XIcon,
   ZapIcon,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -217,7 +216,6 @@ export function InputBox({
 }): React.ReactElement {
   const { t } = useI18n();
   const [localSettings] = useLocalSettings();
-  const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models: configModels } = useModels();
 

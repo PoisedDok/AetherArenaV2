@@ -87,6 +87,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     ],
     [
       t.settings.sections.appearance,
+      t.settings.sections.compact,
       t.settings.sections.memory,
       t.settings.sections.tools,
       t.settings.sections.models,
