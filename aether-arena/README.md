@@ -1,18 +1,16 @@
-# AetherArena version 2
+# AetherArena v2
 
-This repository is the **AetherArena version 2** application line: a workspace for the super-agent harness you run locally or in Docker. Documentation below is **English-only** and focuses on how to configure, run, and extend the system. Historical directory and Python package names (for example `aether-arena/` and `aether-arena`) are unchanged so imports, scripts, and tooling keep working.
+**AetherArena v2** is a super-agent harness you run locally or in Docker — a complete runtime that gives AI agents a filesystem, long-term memory, skills, sandboxed execution, and the ability to plan and delegate to sub-agents.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
-
 ---
 
 ## Table of Contents
 
-- [AetherArena version 2](#aetherarena-version-2)
+- [AetherArena v2](#aetherarena-v2)
   - [Table of Contents](#table-of-contents)
   - [Quick Start](#quick-start)
     - [Configuration](#configuration)
@@ -402,9 +400,9 @@ Then make sure AetherArena v2 is running (default at `http://localhost:2026`) an
 **Environment variables** (optional, for custom endpoints):
 
 ```bash
-DEERFLOW_URL=http://localhost:2026            # Unified proxy base URL
-DEERFLOW_GATEWAY_URL=http://localhost:2026    # Gateway API
-DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
+AETHER_ARENA_URL=http://localhost:2026                          # Unified proxy base URL
+AETHER_ARENA_GATEWAY_URL=http://localhost:2026                  # Gateway API
+AETHER_ARENA_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
 ```
 
 See [`skills/public/claude-to-aether-arena/SKILL.md`](skills/public/claude-to-aether-arena/SKILL.md) for the full API reference.
@@ -480,7 +478,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/aether-arena/client.py` for full API documentation.
+All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/aether/client.py` for full API documentation.
 
 ## Documentation
 
