@@ -1,7 +1,5 @@
 # agent-skills
 
-This is the agent-skills project — a collection of production-grade engineering skills for AI coding agents.
-
 ## Project Structure
 
 ```
