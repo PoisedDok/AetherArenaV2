@@ -12,11 +12,11 @@
 const { app, BrowserWindow, shell, ipcMain, nativeTheme, session, safeStorage } = require('electron');
 const path = require('path');
 
-const DEERFLOW_URL = 'http://localhost:2026';
+const AETHER_ARENA_URL = 'http://localhost:2026';
 const HEALTH_CHECK_URL = 'http://localhost:2026/health';
 
-/** Set DEERFLOW_DISABLE_NATIVE_WINDOW_EFFECTS=1 to use opaque window + CSS splash only. */
-const ENABLE_NATIVE_WINDOW_EFFECTS = process.env.DEERFLOW_DISABLE_NATIVE_WINDOW_EFFECTS !== '1';
+/** Set AETHER_DISABLE_NATIVE_WINDOW_EFFECTS=1 to use opaque window + CSS splash only. */
+const ENABLE_NATIVE_WINDOW_EFFECTS = process.env.AETHER_DISABLE_NATIVE_WINDOW_EFFECTS !== '1';
 
 let mainWindow = null;
 
@@ -39,7 +39,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('aether:load-main-app', async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    await mainWindow.loadURL(DEERFLOW_URL);
+    await mainWindow.loadURL(AETHER_ARENA_URL);
   });
 
   ipcMain.handle('aether:quit-app', async () => {
@@ -124,6 +124,17 @@ function buildWindowOptions() {
 }
 
 /**
+ * Inject X-Electron-App header on all requests so the Next.js middleware
+ * can bypass authentication when running inside the desktop shell.
+ */
+function installElectronHeader(ses) {
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    details.requestHeaders['X-Electron-App'] = 'aether-arena';
+    callback({ requestHeaders: details.requestHeaders });
+  });
+}
+
+/**
  * Create the main application window
  */
 function createWindow() {
@@ -194,6 +205,9 @@ async function checkBackendHealth() {
 registerIpcHandlers();
 
 app.whenReady().then(() => {
+  // Install the Electron identity header on the persistent session so the
+  // Next.js middleware can bypass auth for all requests from this shell.
+  installElectronHeader(session.fromPartition('persist:aether-arena'));
   setTimeout(createWindow, 100);
 });
 

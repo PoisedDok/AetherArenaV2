@@ -76,7 +76,7 @@ html:not(.native-glass) body {
   background-attachment: fixed;
 }
 
-/* System glass: let desktop / vibrancy show through (see deer-flow/electron/main.js) */
+/* System glass: let desktop / vibrancy show through (see aether-arena/electron/main.js) */
 html.native-glass body {
   background: transparent !important;
   background-image: none !important;

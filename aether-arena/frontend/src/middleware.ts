@@ -18,6 +18,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Electron desktop shell injects this header via session.webRequest in main.js.
+  // The app only serves localhost so this header is never reachable from the web.
+  if (request.headers.get("x-electron-app") === "aether-arena") {
+    return NextResponse.next();
+  }
+
   // Check session by calling the better-auth session endpoint
   const sessionUrl = new URL("/api/auth/get-session", request.nextUrl.origin);
   const sessionRes = await fetch(sessionUrl.toString(), {

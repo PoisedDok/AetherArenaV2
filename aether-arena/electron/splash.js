@@ -7,7 +7,7 @@
 (function () {
   /** @returns {Record<string, unknown>} */
   function getDesktopApi() {
-    return typeof window !== 'undefined' ? window.deerflowDesktop || {} : {};
+    return typeof window !== 'undefined' ? window.aetherArenaDesktop || {} : {};
   }
 
   class StartupSplash {
@@ -174,7 +174,7 @@
       const api = getDesktopApi();
 
       if (typeof api.checkBackendHealth !== 'function') {
-        console.error('[StartupSplash] deerflowDesktop.checkBackendHealth is required');
+        console.error('[StartupSplash] aetherArenaDesktop.checkBackendHealth is required');
         this._setStatus('Configuration error');
         return false;
       }
@@ -220,7 +220,7 @@
     async _checkHealthOnce() {
       const api = getDesktopApi();
       if (typeof api.checkBackendHealth !== 'function') {
-        console.error('[StartupSplash] deerflowDesktop.checkBackendHealth is required');
+        console.error('[StartupSplash] aetherArenaDesktop.checkBackendHealth is required');
         return false;
       }
       try {
@@ -258,7 +258,7 @@
 
       if (!cfg.enabled) {
         if (typeof api.loadMainApp !== 'function') {
-          console.error('[StartupSplash] deerflowDesktop.loadMainApp is required');
+          console.error('[StartupSplash] aetherArenaDesktop.loadMainApp is required');
           return;
         }
         await api.loadMainApp();
@@ -364,7 +364,7 @@
       this._healthPollStop = true;
 
       if (typeof api.loadMainApp !== 'function') {
-        console.error('[StartupSplash] deerflowDesktop.loadMainApp is required');
+        console.error('[StartupSplash] aetherArenaDesktop.loadMainApp is required');
         return;
       }
       await api.loadMainApp();

@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: "AetherArena v2",
   description:
     "AetherArena v2 — chat, skills, sandboxed tools, and long-running agent work.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+  },
 };
 
 export default async function RootLayout({

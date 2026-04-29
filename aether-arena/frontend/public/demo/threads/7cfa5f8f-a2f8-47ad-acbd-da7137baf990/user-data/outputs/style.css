@@ -903,16 +903,16 @@ a:hover {
   margin: 0;
 }
 
-.deerflow-branding {
+.aether-arena-branding {
   opacity: 0.7;
   transition: opacity var(--transition-fast);
 }
 
-.deerflow-branding:hover {
+.aether-arena-branding:hover {
   opacity: 1;
 }
 
-.deerflow-link {
+.aether-arena-link {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -920,11 +920,11 @@ a:hover {
   font-size: 0.875rem;
 }
 
-.deerflow-icon {
+.aether-arena-icon {
   font-size: 0.875rem;
 }
 
-.deerflow-text {
+.aether-arena-text {
   font-family: var(--font-sans);
 }
 

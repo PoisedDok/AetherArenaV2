@@ -29,6 +29,10 @@
     "files": [
       "main.js",
       "preload.js",
+      "splash.html",
+      "splash.js",
+      "splash.css",
+      "splash-boot.js",
       "assets/**/*"
     ],
     "mac": {

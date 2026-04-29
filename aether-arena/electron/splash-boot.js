@@ -3,7 +3,7 @@
  */
 'use strict';
 try {
-  const g = typeof window !== 'undefined' ? window.deerflowDesktop : null;
+  const g = typeof window !== 'undefined' ? window.aetherArenaDesktop : null;
   if (g && g.glassBackgroundMode === 'native') {
     document.documentElement.classList.add('native-glass');
   }

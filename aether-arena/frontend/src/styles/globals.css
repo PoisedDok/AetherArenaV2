@@ -270,7 +270,7 @@ html.electron-darwin {
  *   so backdrop-filter has something rich to blur over.
  *
  * The `native-glass` class is set by splash-boot.js when vibrancy is active.
- * The workspace layout also adds it via the same deerflowDesktop.glassBackgroundMode check.
+ * The workspace layout also adds it via the same aetherArenaDesktop.glassBackgroundMode check.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /* Native glass (Electron vibrancy / acrylic): fully transparent body */
