@@ -27,7 +27,7 @@ class SandboxConfig(BaseModel):
 
     use: str = Field(
         ...,
-        description="Class path of the sandbox provider (e.g. deerflow.sandbox.local:LocalSandboxProvider)",
+        description="Class path of the sandbox provider (e.g. aether.sandbox.local:LocalSandboxProvider)",
     )
     image: str | None = Field(
         default=None,

@@ -13,7 +13,7 @@ from aether.config.sandbox_config import SandboxConfig
 def _make_app_config(models: list[ModelConfig]) -> AppConfig:
     return AppConfig(
         models=models,
-        sandbox=SandboxConfig(use="deerflow.sandbox.local:LocalSandboxProvider"),
+        sandbox=SandboxConfig(use="aether.sandbox.local:LocalSandboxProvider"),
     )
 
 

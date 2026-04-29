@@ -1,4 +1,4 @@
-"""Tests for deerflow.models.factory.create_chat_model."""
+"""Tests for aether.models.factory.create_chat_model."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from aether.models import openai_codex_provider as codex_provider_module
 def _make_app_config(models: list[ModelConfig]) -> AppConfig:
     return AppConfig(
         models=models,
-        sandbox=SandboxConfig(use="deerflow.sandbox.local:LocalSandboxProvider"),
+        sandbox=SandboxConfig(use="aether.sandbox.local:LocalSandboxProvider"),
     )
 
 
@@ -517,7 +517,7 @@ def test_codex_provider_disables_reasoning_when_thinking_disabled(monkeypatch):
         [
             _make_model(
                 "codex",
-                use="deerflow.models.openai_codex_provider:CodexChatModel",
+                use="aether.models.openai_codex_provider:CodexChatModel",
                 supports_thinking=True,
                 supports_reasoning_effort=True,
             )
@@ -537,7 +537,7 @@ def test_codex_provider_preserves_explicit_reasoning_effort(monkeypatch):
         [
             _make_model(
                 "codex",
-                use="deerflow.models.openai_codex_provider:CodexChatModel",
+                use="aether.models.openai_codex_provider:CodexChatModel",
                 supports_thinking=True,
                 supports_reasoning_effort=True,
             )
@@ -557,7 +557,7 @@ def test_codex_provider_defaults_reasoning_effort_to_medium(monkeypatch):
         [
             _make_model(
                 "codex",
-                use="deerflow.models.openai_codex_provider:CodexChatModel",
+                use="aether.models.openai_codex_provider:CodexChatModel",
                 supports_thinking=True,
                 supports_reasoning_effort=True,
             )
@@ -577,7 +577,7 @@ def test_codex_provider_strips_unsupported_max_tokens(monkeypatch):
         [
             _make_model(
                 "codex",
-                use="deerflow.models.openai_codex_provider:CodexChatModel",
+                use="aether.models.openai_codex_provider:CodexChatModel",
                 supports_thinking=True,
                 supports_reasoning_effort=True,
                 max_tokens=4096,

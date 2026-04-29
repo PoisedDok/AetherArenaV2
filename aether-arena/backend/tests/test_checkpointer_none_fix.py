@@ -18,7 +18,7 @@ class TestCheckpointerNoneFix:
         mock_config = MagicMock()
         mock_config.checkpointer = None
 
-        with patch("deerflow.agents.checkpointer.async_provider.get_app_config", return_value=mock_config):
+        with patch("aether.agents.checkpointer.async_provider.get_app_config", return_value=mock_config):
             async with make_checkpointer() as checkpointer:
                 # Should return InMemorySaver, not None
                 assert checkpointer is not None
@@ -41,7 +41,7 @@ class TestCheckpointerNoneFix:
         mock_config = MagicMock()
         mock_config.checkpointer = None
 
-        with patch("deerflow.agents.checkpointer.provider.get_app_config", return_value=mock_config):
+        with patch("aether.agents.checkpointer.provider.get_app_config", return_value=mock_config):
             with checkpointer_context() as checkpointer:
                 # Should return InMemorySaver, not None
                 assert checkpointer is not None

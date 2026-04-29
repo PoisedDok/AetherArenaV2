@@ -78,7 +78,7 @@ class TestGetCheckpointer:
         """get_checkpointer should return InMemorySaver when not configured."""
         from langgraph.checkpoint.memory import InMemorySaver
 
-        with patch("deerflow.agents.checkpointer.provider.get_app_config", side_effect=FileNotFoundError):
+        with patch("aether.agents.checkpointer.provider.get_app_config", side_effect=FileNotFoundError):
             cp = get_checkpointer()
         assert cp is not None
         assert isinstance(cp, InMemorySaver)
@@ -216,12 +216,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("deerflow.client.get_app_config", return_value=config_mock),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client.create_chat_model", return_value=MagicMock()),
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value=""),
-            patch("deerflow.client.DeerFlowClient._get_tools", return_value=[]),
+            patch("aether.client.get_app_config", return_value=config_mock),
+            patch("aether.client.create_agent", side_effect=fake_create_agent),
+            patch("aether.client.create_chat_model", return_value=MagicMock()),
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value=""),
+            patch("aether.client.DeerFlowClient._get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=None)
             config = client._get_runnable_config("test-thread")
@@ -250,12 +250,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("deerflow.client.get_app_config", return_value=config_mock),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client.create_chat_model", return_value=MagicMock()),
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value=""),
-            patch("deerflow.client.DeerFlowClient._get_tools", return_value=[]),
+            patch("aether.client.get_app_config", return_value=config_mock),
+            patch("aether.client.create_agent", side_effect=fake_create_agent),
+            patch("aether.client.create_chat_model", return_value=MagicMock()),
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value=""),
+            patch("aether.client.DeerFlowClient._get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=explicit_cp)
             config = client._get_runnable_config("test-thread")

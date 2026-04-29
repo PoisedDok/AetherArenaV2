@@ -151,6 +151,7 @@ export type ModelSelectorLogoProps = Omit<
     | "submodel"
     | "zai"
     | "inference"
+    | "aether-inference"
     | "requesty"
     | "morph"
     | "lmstudio"

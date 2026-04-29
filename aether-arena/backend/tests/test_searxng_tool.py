@@ -16,8 +16,8 @@ from aether.community.searxng.tools import (
 
 
 class TestSearxngWebSearchTool:
-    @patch("deerflow.community.searxng.tools.get_app_config")
-    @patch("deerflow.community.searxng.tools.httpx.get")
+    @patch("aether.community.searxng.tools.get_app_config")
+    @patch("aether.community.searxng.tools.httpx.get")
     def test_success_normalizes_results(self, mock_get, mock_get_config):
         cfg = MagicMock()
         cfg.get_tool_config.return_value = MagicMock(
@@ -49,8 +49,8 @@ class TestSearxngWebSearchTool:
         assert kwargs["params"] == {"q": "test query", "format": "json", "language": "en"}
 
     @patch.dict(os.environ, {"SEARXNG_URL": "http://127.0.0.1:2030"}, clear=False)
-    @patch("deerflow.community.searxng.tools.get_app_config")
-    @patch("deerflow.community.searxng.tools.httpx.get")
+    @patch("aether.community.searxng.tools.get_app_config")
+    @patch("aether.community.searxng.tools.httpx.get")
     def test_falls_back_to_env_without_tool_url(self, mock_get, mock_get_config):
         cfg = MagicMock()
         cfg.get_tool_config.return_value = None
@@ -66,8 +66,8 @@ class TestSearxngWebSearchTool:
         args, kwargs = mock_get.call_args
         assert args[0] == "http://127.0.0.1:2030/search"
 
-    @patch("deerflow.community.searxng.tools.get_app_config")
-    @patch("deerflow.community.searxng.tools.httpx.get")
+    @patch("aether.community.searxng.tools.get_app_config")
+    @patch("aether.community.searxng.tools.httpx.get")
     def test_http_error_returns_error_json(self, mock_get, mock_get_config):
         cfg = MagicMock()
         cfg.get_tool_config.return_value = MagicMock(model_extra={"url": "http://x"})
@@ -97,7 +97,7 @@ def _make_mock_response(status_code: int, text: str = "<html>hello</html>", cont
 class TestDoFetch:
     """Unit tests for the low-level _do_fetch helper."""
 
-    @patch("deerflow.community.searxng.tools.httpx.Client")
+    @patch("aether.community.searxng.tools.httpx.Client")
     def test_success_returns_body(self, mock_client_cls):
         mock_resp = _make_mock_response(200, text="<html>ok</html>")
         mock_client = MagicMock()
@@ -111,7 +111,7 @@ class TestDoFetch:
         assert status == 200
         assert err is None
 
-    @patch("deerflow.community.searxng.tools.httpx.Client")
+    @patch("aether.community.searxng.tools.httpx.Client")
     def test_400_returns_error_with_status(self, mock_client_cls):
         mock_resp = _make_mock_response(403, text="Forbidden")
         mock_client = MagicMock()
@@ -125,7 +125,7 @@ class TestDoFetch:
         assert status == 403
         assert "403" in err
 
-    @patch("deerflow.community.searxng.tools.httpx.Client")
+    @patch("aether.community.searxng.tools.httpx.Client")
     def test_timeout_returns_error(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client.get.side_effect = httpx.ReadTimeout("timed out")
@@ -138,7 +138,7 @@ class TestDoFetch:
         assert status is None
         assert "timed out" in err
 
-    @patch("deerflow.community.searxng.tools.httpx.Client")
+    @patch("aether.community.searxng.tools.httpx.Client")
     def test_unsafe_content_type_blocked(self, mock_client_cls):
         # MagicMock .headers must behave like a dict for .get() calls
         mock_resp = MagicMock()
@@ -162,7 +162,7 @@ class TestDoFetch:
 class TestFetchHtml:
     """Tests for the _fetch_html retry orchestration."""
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_success_on_first_attempt(self, mock_do_fetch):
         mock_do_fetch.return_value = ("<html>ok</html>", 200, None)
 
@@ -174,7 +174,7 @@ class TestFetchHtml:
         # Should use browser headers by default
         assert mock_do_fetch.call_args[0][2] is _BROWSER_HEADERS
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_retries_with_fallback_ua_on_403(self, mock_do_fetch):
         """On 403, _fetch_html must retry with the Firefox fallback UA."""
         mock_do_fetch.side_effect = [
@@ -191,7 +191,7 @@ class TestFetchHtml:
         second_call_headers = mock_do_fetch.call_args_list[1][0][2]
         assert second_call_headers is _FALLBACK_HEADERS
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_retries_with_fallback_ua_on_429(self, mock_do_fetch):
         """429 rate-limit also triggers fallback retry."""
         mock_do_fetch.side_effect = [
@@ -204,7 +204,7 @@ class TestFetchHtml:
         assert body == "<html>ok</html>"
         assert err is None
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_actionable_error_when_both_uas_blocked(self, mock_do_fetch):
         """If both Chrome and Firefox UA are blocked, return an actionable message."""
         mock_do_fetch.side_effect = [
@@ -219,7 +219,7 @@ class TestFetchHtml:
         assert "403" in err
         assert "web_search" in err  # actionable: tells LLM what to do next
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_ssl_error_retries_without_verification(self, mock_do_fetch):
         """SSL errors on first attempt should trigger a no-verify retry."""
         mock_do_fetch.side_effect = [
@@ -236,7 +236,7 @@ class TestFetchHtml:
         _, kwargs = mock_do_fetch.call_args_list[1]
         assert kwargs.get("verify") is False
 
-    @patch("deerflow.community.searxng.tools._do_fetch")
+    @patch("aether.community.searxng.tools._do_fetch")
     def test_non_blocked_error_returned_directly(self, mock_do_fetch):
         """Non-4xx errors (network failures) should not trigger retry, returned as-is."""
         mock_do_fetch.return_value = (None, None, "Connection refused")

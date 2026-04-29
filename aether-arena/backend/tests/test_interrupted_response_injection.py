@@ -86,7 +86,7 @@ def _make_test_app_cfg():
     )
     return AppConfig(
         models=[model_cfg],
-        sandbox=SandboxConfig(use="deerflow.sandbox.local:LocalSandboxProvider"),
+        sandbox=SandboxConfig(use="aether.sandbox.local:LocalSandboxProvider"),
     )
 
 
@@ -101,15 +101,15 @@ def _run_make_lead_agent(config: dict, captured_kwargs: dict) -> None:
         return "mock system prompt"
 
     with (
-        patch("deerflow.agents.lead_agent.agent.apply_prompt_template", side_effect=mock_apply),
-        patch("deerflow.agents.lead_agent.agent.get_app_config", return_value=app_cfg),
-        patch("deerflow.agents.lead_agent.agent.create_chat_model", return_value=mock_model),
+        patch("aether.agents.lead_agent.agent.apply_prompt_template", side_effect=mock_apply),
+        patch("aether.agents.lead_agent.agent.get_app_config", return_value=app_cfg),
+        patch("aether.agents.lead_agent.agent.create_chat_model", return_value=mock_model),
         # get_available_tools / setup_agent are lazy-imported inside the function body
-        patch("deerflow.tools.get_available_tools", return_value=[]),
-        patch("deerflow.tools.builtins.setup_agent", MagicMock()),
-        patch("deerflow.agents.lead_agent.agent._build_middlewares", return_value=[]),
-        patch("deerflow.agents.lead_agent.agent.create_agent", return_value=mock_agent),
-        patch("deerflow.agents.lead_agent.agent.load_agent_config", return_value=None),
+        patch("aether.tools.get_available_tools", return_value=[]),
+        patch("aether.tools.builtins.setup_agent", MagicMock()),
+        patch("aether.agents.lead_agent.agent._build_middlewares", return_value=[]),
+        patch("aether.agents.lead_agent.agent.create_agent", return_value=mock_agent),
+        patch("aether.agents.lead_agent.agent.load_agent_config", return_value=None),
     ):
         from aether.agents.lead_agent.agent import make_lead_agent
         make_lead_agent(config)

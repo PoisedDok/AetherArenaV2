@@ -48,8 +48,8 @@ def test_mask_local_paths_in_output_hides_host_paths() -> None:
 def test_mask_local_paths_in_output_hides_skills_host_paths() -> None:
     """Skills host paths in bash output should be masked to virtual paths."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
     ):
         output = "Reading: /home/user/deer-flow/skills/public/bootstrap/SKILL.md"
         masked = mask_local_paths_in_output(output, _THREAD_DATA)
@@ -117,7 +117,7 @@ def test_validate_local_tool_path_rejects_traversal_in_user_data() -> None:
 
 def test_validate_local_tool_path_rejects_traversal_in_skills() -> None:
     """Path traversal via .. in skills paths must be rejected."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         with pytest.raises(PermissionError, match="path traversal"):
             validate_local_tool_path("/mnt/skills/../../etc/passwd", _THREAD_DATA, read_only=True)
 
@@ -136,8 +136,8 @@ def test_validate_local_tool_path_rejects_none_thread_data() -> None:
 def test_resolve_skills_path_resolves_correctly() -> None:
     """Skills virtual path should resolve to host path."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
     ):
         resolved = _resolve_skills_path("/mnt/skills/public/bootstrap/SKILL.md")
         assert resolved == "/home/user/deer-flow/skills/public/bootstrap/SKILL.md"
@@ -146,8 +146,8 @@ def test_resolve_skills_path_resolves_correctly() -> None:
 def test_resolve_skills_path_resolves_root() -> None:
     """Skills container root should resolve to host skills directory."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
     ):
         resolved = _resolve_skills_path("/mnt/skills")
         assert resolved == "/home/user/deer-flow/skills"
@@ -156,8 +156,8 @@ def test_resolve_skills_path_resolves_root() -> None:
 def test_resolve_skills_path_raises_when_not_configured() -> None:
     """Should raise FileNotFoundError when skills directory is not available."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value=None),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value=None),
     ):
         with pytest.raises(FileNotFoundError, match="Skills directory not available"):
             _resolve_skills_path("/mnt/skills/public/bootstrap/SKILL.md")
@@ -199,8 +199,8 @@ def test_resolve_and_validate_user_data_path_blocks_traversal(tmp_path: Path) ->
 def test_replace_virtual_paths_in_command_replaces_skills_paths() -> None:
     """Skills virtual paths in commands should be resolved to host paths."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/deer-flow/skills"),
     ):
         cmd = "cat /mnt/skills/public/bootstrap/SKILL.md"
         result = replace_virtual_paths_in_command(cmd, _THREAD_DATA)
@@ -211,8 +211,8 @@ def test_replace_virtual_paths_in_command_replaces_skills_paths() -> None:
 def test_replace_virtual_paths_in_command_replaces_both() -> None:
     """Both user-data and skills paths should be replaced in the same command."""
     with (
-        patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
-        patch("deerflow.sandbox.tools._get_skills_host_path", return_value="/home/user/skills"),
+        patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"),
+        patch("aether.sandbox.tools._get_skills_host_path", return_value="/home/user/skills"),
     ):
         cmd = "cat /mnt/skills/public/SKILL.md > /mnt/user-data/workspace/out.txt"
         result = replace_virtual_paths_in_command(cmd, _THREAD_DATA)
@@ -248,7 +248,7 @@ def test_validate_local_bash_command_paths_blocks_traversal_in_user_data() -> No
 
 def test_validate_local_bash_command_paths_blocks_traversal_in_skills() -> None:
     """Bash commands with traversal in skills paths should be blocked."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         with pytest.raises(PermissionError, match="path traversal"):
             validate_local_bash_command_paths(
                 "cat /mnt/skills/../../etc/passwd",
@@ -260,7 +260,7 @@ def test_validate_local_bash_command_paths_blocks_traversal_in_skills() -> None:
 
 
 def test_is_skills_path_recognises_default_prefix() -> None:
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         assert _is_skills_path("/mnt/skills") is True
         assert _is_skills_path("/mnt/skills/public/bootstrap/SKILL.md") is True
         assert _is_skills_path("/mnt/skills-extra/foo") is False
@@ -269,7 +269,7 @@ def test_is_skills_path_recognises_default_prefix() -> None:
 
 def test_validate_local_tool_path_allows_skills_read_only() -> None:
     """read_file / ls should be able to access /mnt/skills paths."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         # Should not raise
         validate_local_tool_path(
             "/mnt/skills/public/bootstrap/SKILL.md",
@@ -280,7 +280,7 @@ def test_validate_local_tool_path_allows_skills_read_only() -> None:
 
 def test_validate_local_tool_path_blocks_skills_write() -> None:
     """write_file / str_replace must NOT write to skills paths."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         with pytest.raises(PermissionError, match="Write access to skills path is not allowed"):
             validate_local_tool_path(
                 "/mnt/skills/public/bootstrap/SKILL.md",
@@ -291,7 +291,7 @@ def test_validate_local_tool_path_blocks_skills_write() -> None:
 
 def test_validate_local_bash_command_paths_allows_skills_path() -> None:
     """bash commands referencing /mnt/skills should be allowed."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         validate_local_bash_command_paths(
             "cat /mnt/skills/public/bootstrap/SKILL.md",
             _THREAD_DATA,
@@ -300,14 +300,14 @@ def test_validate_local_bash_command_paths_allows_skills_path() -> None:
 
 def test_validate_local_bash_command_paths_still_blocks_other_paths() -> None:
     """Paths outside virtual and system prefixes must still be blocked."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/mnt/skills"):
         with pytest.raises(PermissionError, match="Unsafe absolute paths"):
             validate_local_bash_command_paths("cat /etc/shadow", _THREAD_DATA)
 
 
 def test_validate_local_tool_path_skills_custom_container_path() -> None:
     """Skills with a custom container_path in config should also work."""
-    with patch("deerflow.sandbox.tools._get_skills_container_path", return_value="/custom/skills"):
+    with patch("aether.sandbox.tools._get_skills_container_path", return_value="/custom/skills"):
         # Should not raise
         validate_local_tool_path(
             "/custom/skills/public/my-skill/SKILL.md",

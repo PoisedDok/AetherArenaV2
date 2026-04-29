@@ -48,7 +48,7 @@ def mock_app_config():
 @pytest.fixture
 def client(mock_app_config):
     """Create a DeerFlowClient with mocked config loading."""
-    with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+    with patch("aether.client.get_app_config", return_value=mock_app_config):
         return DeerFlowClient()
 
 
@@ -68,7 +68,7 @@ class TestClientInit:
         assert client._agent is None
 
     def test_custom_params(self, mock_app_config):
-        with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+        with patch("aether.client.get_app_config", return_value=mock_app_config):
             c = DeerFlowClient(
                 model_name="gpt-4",
                 thinking_enabled=False,
@@ -83,7 +83,7 @@ class TestClientInit:
         assert c._agent_name == "test-agent"
 
     def test_invalid_agent_name(self, mock_app_config):
-        with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+        with patch("aether.client.get_app_config", return_value=mock_app_config):
             with pytest.raises(ValueError, match="Invalid agent name"):
                 DeerFlowClient(agent_name="invalid name with spaces!")
             with pytest.raises(ValueError, match="Invalid agent name"):
@@ -91,15 +91,15 @@ class TestClientInit:
 
     def test_custom_config_path(self, mock_app_config):
         with (
-            patch("deerflow.client.reload_app_config") as mock_reload,
-            patch("deerflow.client.get_app_config", return_value=mock_app_config),
+            patch("aether.client.reload_app_config") as mock_reload,
+            patch("aether.client.get_app_config", return_value=mock_app_config),
         ):
             DeerFlowClient(config_path="/tmp/custom.yaml")
             mock_reload.assert_called_once_with("/tmp/custom.yaml")
 
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
-        with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+        with patch("aether.client.get_app_config", return_value=mock_app_config):
             c = DeerFlowClient(checkpointer=cp)
         assert c._checkpointer is cp
 
@@ -130,7 +130,7 @@ class TestConfigQueries:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]) as mock_load:
+        with patch("aether.skills.loader.load_skills", return_value=[skill]) as mock_load:
             result = client.list_skills()
             mock_load.assert_called_once_with(enabled_only=False)
 
@@ -145,13 +145,13 @@ class TestConfigQueries:
         }
 
     def test_list_skills_enabled_only(self, client):
-        with patch("deerflow.skills.loader.load_skills", return_value=[]) as mock_load:
+        with patch("aether.skills.loader.load_skills", return_value=[]) as mock_load:
             client.list_skills(enabled_only=True)
             mock_load.assert_called_once_with(enabled_only=True)
 
     def test_get_memory(self, client):
         memory = {"version": "1.0", "facts": []}
-        with patch("deerflow.agents.memory.updater.get_memory_data", return_value=memory) as mock_mem:
+        with patch("aether.agents.memory.updater.get_memory_data", return_value=memory) as mock_mem:
             result = client.get_memory()
             mock_mem.assert_called_once()
         assert result == memory
@@ -393,10 +393,10 @@ class TestEnsureAgent:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", return_value=mock_agent),
-            patch("deerflow.client._build_middlewares", return_value=[]) as mock_build_middlewares,
-            patch("deerflow.client.apply_prompt_template", return_value="prompt") as mock_apply_prompt,
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", return_value=mock_agent),
+            patch("aether.client._build_middlewares", return_value=[]) as mock_build_middlewares,
+            patch("aether.client.apply_prompt_template", return_value="prompt") as mock_apply_prompt,
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._agent_name = "custom-agent"
@@ -415,12 +415,12 @@ class TestEnsureAgent:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", return_value=mock_agent) as mock_create_agent,
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", return_value=mock_agent) as mock_create_agent,
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
-            patch("deerflow.agents.checkpointer.get_checkpointer", return_value=mock_checkpointer),
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=mock_checkpointer),
         ):
             client._ensure_agent(config)
 
@@ -431,12 +431,12 @@ class TestEnsureAgent:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", return_value=mock_agent) as mock_create_agent,
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", return_value=mock_agent) as mock_create_agent,
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
-            patch("deerflow.agents.checkpointer.get_checkpointer", return_value=None),
+            patch("aether.agents.checkpointer.get_checkpointer", return_value=None),
         ):
             client._ensure_agent(config)
 
@@ -499,7 +499,7 @@ class TestMcpConfig:
         ext_config = MagicMock()
         ext_config.mcp_servers = {"github": server}
 
-        with patch("deerflow.client.get_extensions_config", return_value=ext_config):
+        with patch("aether.client.get_extensions_config", return_value=ext_config):
             result = client.get_mcp_config()
 
         assert "mcp_servers" in result
@@ -525,9 +525,9 @@ class TestMcpConfig:
             client._agent = MagicMock()
 
             with (
-                patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
-                patch("deerflow.client.get_extensions_config", return_value=current_config),
-                patch("deerflow.client.reload_extensions_config", return_value=reloaded_config),
+                patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
+                patch("aether.client.get_extensions_config", return_value=current_config),
+                patch("aether.client.reload_extensions_config", return_value=reloaded_config),
             ):
                 result = client.update_mcp_config({"new-server": {"enabled": True, "type": "sse"}})
 
@@ -560,13 +560,13 @@ class TestSkillsManagement:
 
     def test_get_skill_found(self, client):
         skill = self._make_skill()
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]):
+        with patch("aether.skills.loader.load_skills", return_value=[skill]):
             result = client.get_skill("test-skill")
         assert result is not None
         assert result["name"] == "test-skill"
 
     def test_get_skill_not_found(self, client):
-        with patch("deerflow.skills.loader.load_skills", return_value=[]):
+        with patch("aether.skills.loader.load_skills", return_value=[]):
             result = client.get_skill("nonexistent")
         assert result is None
 
@@ -587,10 +587,10 @@ class TestSkillsManagement:
             client._agent = MagicMock()
 
             with (
-                patch("deerflow.skills.loader.load_skills", side_effect=[[skill], [updated_skill]]),
-                patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
-                patch("deerflow.client.get_extensions_config", return_value=ext_config),
-                patch("deerflow.client.reload_extensions_config"),
+                patch("aether.skills.loader.load_skills", side_effect=[[skill], [updated_skill]]),
+                patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
+                patch("aether.client.get_extensions_config", return_value=ext_config),
+                patch("aether.client.reload_extensions_config"),
             ):
                 result = client.update_skill("test-skill", enabled=False)
             assert result["enabled"] is False
@@ -599,7 +599,7 @@ class TestSkillsManagement:
             tmp_path.unlink()
 
     def test_update_skill_not_found(self, client):
-        with patch("deerflow.skills.loader.load_skills", return_value=[]):
+        with patch("aether.skills.loader.load_skills", return_value=[]):
             with pytest.raises(ValueError, match="not found"):
                 client.update_skill("nonexistent", enabled=True)
 
@@ -620,8 +620,8 @@ class TestSkillsManagement:
             (skills_root / "custom").mkdir(parents=True)
 
             with (
-                patch("deerflow.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("deerflow.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
+                patch("aether.skills.loader.get_skills_root_path", return_value=skills_root),
+                patch("aether.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
             ):
                 result = client.install_skill(archive_path)
 
@@ -651,7 +651,7 @@ class TestSkillsManagement:
 class TestMemoryManagement:
     def test_reload_memory(self, client):
         data = {"version": "1.0", "facts": []}
-        with patch("deerflow.agents.memory.updater.reload_memory_data", return_value=data):
+        with patch("aether.agents.memory.updater.reload_memory_data", return_value=data):
             result = client.reload_memory()
         assert result == data
 
@@ -665,7 +665,7 @@ class TestMemoryManagement:
         config.injection_enabled = True
         config.max_injection_tokens = 2000
 
-        with patch("deerflow.config.memory_config.get_memory_config", return_value=config):
+        with patch("aether.config.memory_config.get_memory_config", return_value=config):
             result = client.get_memory_config()
 
         assert result["enabled"] is True
@@ -684,8 +684,8 @@ class TestMemoryManagement:
         data = {"version": "1.0", "facts": []}
 
         with (
-            patch("deerflow.config.memory_config.get_memory_config", return_value=config),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=data),
+            patch("aether.config.memory_config.get_memory_config", return_value=config),
+            patch("aether.agents.memory.updater.get_memory_data", return_value=data),
         ):
             result = client.get_memory_status()
 
@@ -767,8 +767,8 @@ class TestUploads:
 
             with (
                 patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir),
-                patch("deerflow.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
-                patch("deerflow.utils.file_conversion.convert_file_to_markdown", side_effect=fake_convert),
+                patch("aether.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
+                patch("aether.utils.file_conversion.convert_file_to_markdown", side_effect=fake_convert),
                 patch("concurrent.futures.ThreadPoolExecutor", FakeExecutor),
             ):
                 result = asyncio.run(call_upload())
@@ -840,7 +840,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("deerflow.client.get_paths", return_value=mock_paths):
+            with patch("aether.client.get_paths", return_value=mock_paths):
                 content, mime = client.get_artifact("t1", "mnt/user-data/outputs/result.txt")
 
             assert content == b"artifact content"
@@ -854,7 +854,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("deerflow.client.get_paths", return_value=mock_paths):
+            with patch("aether.client.get_paths", return_value=mock_paths):
                 with pytest.raises(FileNotFoundError):
                     client.get_artifact("t1", "mnt/user-data/outputs/nope.txt")
 
@@ -870,7 +870,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("deerflow.client.get_paths", return_value=mock_paths):
+            with patch("aether.client.get_paths", return_value=mock_paths):
                 with pytest.raises(PermissionError):
                     client.get_artifact("t1", "mnt/user-data/../../../etc/passwd")
 
@@ -1075,7 +1075,7 @@ class TestScenarioFileLifecycle:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("deerflow.client.get_paths", return_value=mock_paths):
+            with patch("aether.client.get_paths", return_value=mock_paths):
                 content, mime = client.get_artifact("t-artifact", "mnt/user-data/outputs/analysis.json")
 
             assert json.loads(content) == {"result": "processed"}
@@ -1114,12 +1114,12 @@ class TestScenarioConfigManagement:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]):
+        with patch("aether.skills.loader.load_skills", return_value=[skill]):
             skills_result = client.list_skills()
         assert len(skills_result["skills"]) == 1
 
         # Get specific skill
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]):
+        with patch("aether.skills.loader.load_skills", return_value=[skill]):
             detail = client.get_skill("web-search")
         assert detail is not None
         assert detail["enabled"] is True
@@ -1141,9 +1141,9 @@ class TestScenarioConfigManagement:
 
             client._agent = MagicMock()  # Simulate existing agent
             with (
-                patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch("deerflow.client.get_extensions_config", return_value=current_config),
-                patch("deerflow.client.reload_extensions_config", return_value=reloaded_config),
+                patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
+                patch("aether.client.get_extensions_config", return_value=current_config),
+                patch("aether.client.reload_extensions_config", return_value=reloaded_config),
             ):
                 mcp_result = client.update_mcp_config({"my-mcp": {"enabled": True}})
             assert "my-mcp" in mcp_result["mcp_servers"]
@@ -1170,10 +1170,10 @@ class TestScenarioConfigManagement:
 
             client._agent = MagicMock()  # Simulate re-created agent
             with (
-                patch("deerflow.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
-                patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch("deerflow.client.get_extensions_config", return_value=ext_config),
-                patch("deerflow.client.reload_extensions_config"),
+                patch("aether.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
+                patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
+                patch("aether.client.get_extensions_config", return_value=ext_config),
+                patch("aether.client.reload_extensions_config"),
             ):
                 skill_result = client.update_skill("code-gen", enabled=False)
             assert skill_result["enabled"] is False
@@ -1196,10 +1196,10 @@ class TestScenarioAgentRecreation:
         config_b = client._get_runnable_config("t1", model_name="claude-3")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", side_effect=fake_create_agent),
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config_a)
@@ -1223,10 +1223,10 @@ class TestScenarioAgentRecreation:
         config = client._get_runnable_config("t1", model_name="gpt-4")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", side_effect=fake_create_agent),
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1247,10 +1247,10 @@ class TestScenarioAgentRecreation:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("deerflow.client.create_chat_model"),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client._build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value="prompt"),
+            patch("aether.client.create_chat_model"),
+            patch("aether.client.create_agent", side_effect=fake_create_agent),
+            patch("aether.client._build_middlewares", return_value=[]),
+            patch("aether.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1321,7 +1321,7 @@ class TestScenarioThreadIsolation:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.side_effect = lambda tid: data_a if tid == "thread-a" else data_b
 
-            with patch("deerflow.client.get_paths", return_value=mock_paths):
+            with patch("aether.client.get_paths", return_value=mock_paths):
                 content, _ = client.get_artifact("thread-a", "mnt/user-data/outputs/result.txt")
                 assert content == b"thread-a artifact"
 
@@ -1352,17 +1352,17 @@ class TestScenarioMemoryWorkflow:
         config.injection_enabled = True
         config.max_injection_tokens = 2000
 
-        with patch("deerflow.agents.memory.updater.get_memory_data", return_value=initial_data):
+        with patch("aether.agents.memory.updater.get_memory_data", return_value=initial_data):
             mem = client.get_memory()
         assert len(mem["facts"]) == 1
 
-        with patch("deerflow.agents.memory.updater.reload_memory_data", return_value=updated_data):
+        with patch("aether.agents.memory.updater.reload_memory_data", return_value=updated_data):
             refreshed = client.reload_memory()
         assert len(refreshed["facts"]) == 2
 
         with (
-            patch("deerflow.config.memory_config.get_memory_config", return_value=config),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=updated_data),
+            patch("aether.config.memory_config.get_memory_config", return_value=config),
+            patch("aether.agents.memory.updater.get_memory_data", return_value=updated_data),
         ):
             status = client.get_memory_status()
         assert status["config"]["enabled"] is True
@@ -1390,8 +1390,8 @@ class TestScenarioSkillInstallAndUse:
 
             # Step 1: Install
             with (
-                patch("deerflow.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("deerflow.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
+                patch("aether.skills.loader.get_skills_root_path", return_value=skills_root),
+                patch("aether.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
             ):
                 result = client.install_skill(archive)
             assert result["success"] is True
@@ -1405,7 +1405,7 @@ class TestScenarioSkillInstallAndUse:
             installed_skill.category = "custom"
             installed_skill.enabled = True
 
-            with patch("deerflow.skills.loader.load_skills", return_value=[installed_skill]):
+            with patch("aether.skills.loader.load_skills", return_value=[installed_skill]):
                 skills_result = client.list_skills()
             assert any(s["name"] == "my-analyzer" for s in skills_result["skills"])
 
@@ -1425,10 +1425,10 @@ class TestScenarioSkillInstallAndUse:
             config_file.write_text("{}")
 
             with (
-                patch("deerflow.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
-                patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch("deerflow.client.get_extensions_config", return_value=ext_config),
-                patch("deerflow.client.reload_extensions_config"),
+                patch("aether.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
+                patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
+                patch("aether.client.get_extensions_config", return_value=ext_config),
+                patch("aether.client.reload_extensions_config"),
             ):
                 toggled = client.update_skill("my-analyzer", enabled=False)
             assert toggled["enabled"] is False
@@ -1525,8 +1525,8 @@ class TestScenarioEdgeCases:
 
             with (
                 patch.object(DeerFlowClient, "_get_uploads_dir", return_value=uploads_dir),
-                patch("deerflow.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
-                patch("deerflow.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
+                patch("aether.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
+                patch("aether.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
             ):
                 result = client.upload_files("t-pdf-fail", [pdf_file])
 
@@ -1562,7 +1562,7 @@ class TestGatewayConformance:
         model.model_dump.return_value = {"base_url": "https://api.openai.com/v1"}
         mock_app_config.models = [model]
 
-        with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+        with patch("aether.client.get_app_config", return_value=mock_app_config):
             client = DeerFlowClient()
 
         result = client.list_models()
@@ -1586,7 +1586,7 @@ class TestGatewayConformance:
         mock_app_config.models = [model]
         mock_app_config.get_model_config.return_value = model
 
-        with patch("deerflow.client.get_app_config", return_value=mock_app_config):
+        with patch("aether.client.get_app_config", return_value=mock_app_config):
             client = DeerFlowClient()
 
         result = client.get_model("test-model")
@@ -1604,7 +1604,7 @@ class TestGatewayConformance:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]):
+        with patch("aether.skills.loader.load_skills", return_value=[skill]):
             result = client.list_skills()
 
         parsed = SkillsListResponse(**result)
@@ -1619,7 +1619,7 @@ class TestGatewayConformance:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("deerflow.skills.loader.load_skills", return_value=[skill]):
+        with patch("aether.skills.loader.load_skills", return_value=[skill]):
             result = client.get_skill("web-search")
 
         assert result is not None
@@ -1637,7 +1637,7 @@ class TestGatewayConformance:
 
         custom_dir = tmp_path / "custom"
         custom_dir.mkdir()
-        with patch("deerflow.skills.loader.get_skills_root_path", return_value=tmp_path):
+        with patch("aether.skills.loader.get_skills_root_path", return_value=tmp_path):
             result = client.install_skill(archive)
 
         parsed = SkillInstallResponse(**result)
@@ -1659,7 +1659,7 @@ class TestGatewayConformance:
         ext_config = MagicMock()
         ext_config.mcp_servers = {"test": server}
 
-        with patch("deerflow.client.get_extensions_config", return_value=ext_config):
+        with patch("aether.client.get_extensions_config", return_value=ext_config):
             result = client.get_mcp_config()
 
         parsed = McpConfigResponse(**result)
@@ -1685,9 +1685,9 @@ class TestGatewayConformance:
         config_file.write_text("{}")
 
         with (
-            patch("deerflow.client.get_extensions_config", return_value=ext_config),
-            patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-            patch("deerflow.client.reload_extensions_config", return_value=ext_config),
+            patch("aether.client.get_extensions_config", return_value=ext_config),
+            patch("aether.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
+            patch("aether.client.reload_extensions_config", return_value=ext_config),
         ):
             result = client.update_mcp_config({"srv": server.model_dump.return_value})
 
@@ -1718,7 +1718,7 @@ class TestGatewayConformance:
         mem_cfg.injection_enabled = True
         mem_cfg.max_injection_tokens = 2000
 
-        with patch("deerflow.config.memory_config.get_memory_config", return_value=mem_cfg):
+        with patch("aether.config.memory_config.get_memory_config", return_value=mem_cfg):
             result = client.get_memory_config()
 
         parsed = MemoryConfigResponse(**result)
@@ -1752,8 +1752,8 @@ class TestGatewayConformance:
         }
 
         with (
-            patch("deerflow.config.memory_config.get_memory_config", return_value=mem_cfg),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=memory_data),
+            patch("aether.config.memory_config.get_memory_config", return_value=mem_cfg),
+            patch("aether.agents.memory.updater.get_memory_data", return_value=memory_data),
         ):
             result = client.get_memory_status()
 

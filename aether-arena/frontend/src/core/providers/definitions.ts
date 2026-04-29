@@ -17,6 +17,15 @@ export interface ProviderDefinition {
 
 export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
   {
+    id: "aether-inference",
+    displayName: "Aether Inference",
+    kind: "local",
+    localUrl: "http://localhost:7090",
+    description: "AetherArena's personal modular inference engine. OpenAI-compatible.",
+    providerUsePatterns: ["aether_inference", "aether-inference"],
+    endpointPatterns: ["localhost:7090", "host.docker.internal:7090"],
+  },
+  {
     id: "lmstudio",
     displayName: "LM Studio",
     kind: "local",

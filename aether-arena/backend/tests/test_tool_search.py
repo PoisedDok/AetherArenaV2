@@ -232,7 +232,7 @@ class TestDeferredToolsPromptSection:
 
         mock_config = MagicMock()
         mock_config.tool_search = ToolSearchConfig()  # disabled by default
-        monkeypatch.setattr("deerflow.config.get_app_config", lambda: mock_config)
+        monkeypatch.setattr("aether.config.get_app_config", lambda: mock_config)
 
     def test_empty_when_disabled(self):
         from aether.agents.lead_agent.prompt import get_deferred_tools_prompt_section
@@ -282,16 +282,16 @@ class TestDeferredToolFilterMiddleware:
     def _ensure_middlewares_package(self):
         """Remove mock entries injected by test_subagent_executor.py.
 
-        That file replaces deerflow.agents and deerflow.agents.middlewares with
+        That file replaces aether.agents and aether.agents.middlewares with
         MagicMock objects in sys.modules (session-scoped) to break circular imports.
         We must clear those mocks so real submodule imports work.
         """
         from unittest.mock import MagicMock
 
         mock_keys = [
-            "deerflow.agents",
-            "deerflow.agents.middlewares",
-            "deerflow.agents.middlewares.deferred_tool_filter_middleware",
+            "aether.agents",
+            "aether.agents.middlewares",
+            "aether.agents.middlewares.deferred_tool_filter_middleware",
         ]
         for key in mock_keys:
             if isinstance(sys.modules.get(key), MagicMock):

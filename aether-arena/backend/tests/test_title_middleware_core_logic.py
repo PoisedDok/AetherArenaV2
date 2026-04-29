@@ -78,7 +78,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=MagicMock(content='"A very long generated title"'))
-        monkeypatch.setattr("deerflow.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("aether.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [
@@ -101,7 +101,7 @@ class TestTitleMiddlewareCoreLogic:
             return_value=MagicMock(content=[{"type": "text", "text": '"结构总结"'}]),
         )
         monkeypatch.setattr(
-            "deerflow.agents.middlewares.title_middleware.create_chat_model",
+            "aether.agents.middlewares.title_middleware.create_chat_model",
             lambda **kwargs: fake_model,
         )
 
@@ -129,7 +129,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
-        monkeypatch.setattr("deerflow.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("aether.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [
@@ -170,7 +170,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.invoke = MagicMock(return_value=MagicMock(content='"同步生成的标题"'))
-        monkeypatch.setattr("deerflow.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("aether.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [
@@ -188,7 +188,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.invoke = MagicMock(return_value=MagicMock(content="   "))
-        monkeypatch.setattr("deerflow.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("aether.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [

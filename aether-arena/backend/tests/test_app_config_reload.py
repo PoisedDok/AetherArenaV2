@@ -13,7 +13,7 @@ def _write_config(path: Path, *, model_name: str, supports_thinking: bool) -> No
     path.write_text(
         yaml.safe_dump(
             {
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "aether.sandbox.local:LocalSandboxProvider"},
                 "models": [
                     {
                         "name": model_name,

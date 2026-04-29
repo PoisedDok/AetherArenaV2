@@ -30,11 +30,11 @@ class TestMemoryMiddlewareAutoMemory:
         )
         mock_queue = MagicMock()
         with patch(
-            "deerflow.agents.middlewares.memory_middleware.get_memory_config",
+            "aether.agents.middlewares.memory_middleware.get_memory_config",
             return_value=MemoryConfig(enabled=True),
         ):
             with patch(
-                "deerflow.agents.middlewares.memory_middleware.get_memory_queue",
+                "aether.agents.middlewares.memory_middleware.get_memory_queue",
                 return_value=mock_queue,
             ):
                 result = middleware.after_agent(state, runtime)
@@ -53,11 +53,11 @@ class TestMemoryMiddlewareAutoMemory:
         )
         mock_queue = MagicMock()
         with patch(
-            "deerflow.agents.middlewares.memory_middleware.get_memory_config",
+            "aether.agents.middlewares.memory_middleware.get_memory_config",
             return_value=MemoryConfig(enabled=True),
         ):
             with patch(
-                "deerflow.agents.middlewares.memory_middleware.get_memory_queue",
+                "aether.agents.middlewares.memory_middleware.get_memory_queue",
                 return_value=mock_queue,
             ):
                 result = middleware.after_agent(state, runtime)
@@ -75,11 +75,11 @@ class TestMemoryMiddlewareAutoMemory:
         runtime = Runtime(context={"thread_id": "thread-legacy-client"})
         mock_queue = MagicMock()
         with patch(
-            "deerflow.agents.middlewares.memory_middleware.get_memory_config",
+            "aether.agents.middlewares.memory_middleware.get_memory_config",
             return_value=MemoryConfig(enabled=True),
         ):
             with patch(
-                "deerflow.agents.middlewares.memory_middleware.get_memory_queue",
+                "aether.agents.middlewares.memory_middleware.get_memory_queue",
                 return_value=mock_queue,
             ):
                 result = middleware.after_agent(state, runtime)

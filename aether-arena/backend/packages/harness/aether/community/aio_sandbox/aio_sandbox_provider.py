@@ -51,7 +51,7 @@ class AioSandboxProvider(SandboxProvider):
         - Remote/K8s mode (connect to pre-existing sandbox URL)
 
     Configuration options in config.yaml under sandbox:
-        use: deerflow.community.aio_sandbox:AioSandboxProvider
+        use: aether.community.aio_sandbox:AioSandboxProvider
         image: <container image>
         port: 8080                      # Base port for local containers
         container_prefix: deer-flow-sandbox

@@ -102,6 +102,7 @@ import { ModeHoverGuide } from "./mode-hover-guide";
 // Helper to extract a short provider tag from display_name
 function getProviderTag(displayName: string): string {
   const lower = displayName.toLowerCase();
+  if (lower.includes("aether")) return "Aether";
   if (lower.includes("lmstudio") || lower.includes("lm-studio")) return "LM";
   if (lower.includes("openai") && lower.includes("azure")) return "Azure";
   if (lower.includes("openai")) return "OpenAI";
@@ -121,7 +122,7 @@ function getProviderTag(displayName: string): string {
 function formatModelDisplay(m: Model): string {
   // Try to get a meaningful name from model field
   const cleanedModelId = m.model
-    .replace(/^(lmstudio-|local-|ollama-)/i, "")
+    .replace(/^(aether-|lmstudio-|local-|ollama-)/i, "")
     .replace(/_/g, "-")
     .replace(/:latest$/i, "");
 
@@ -148,7 +149,7 @@ function formatModelDisplay(m: Model): string {
   // Fall back to the name field (usually the config key)
   if (m.name && m.name.length > 0 && m.name !== "default") {
     return m.name
-      .replace(/^(lmstudio|local|ollama)_/i, "")
+      .replace(/^(aether|lmstudio|local|ollama)_/i, "")
       .replace(/_/g, "-");
   }
 

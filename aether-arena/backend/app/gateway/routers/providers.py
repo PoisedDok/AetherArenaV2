@@ -63,12 +63,14 @@ class OpenRouterModelsResponse(BaseModel):
 _LOCAL_HOST = os.environ.get("AETHER_ARENA_SANDBOX_HOST", "localhost")
 
 _LOCAL_PROVIDERS: dict[str, str] = {
+    "aether-inference": f"http://{_LOCAL_HOST}:7090",
     "lmstudio": f"http://{_LOCAL_HOST}:1234",
     "ollama": f"http://{_LOCAL_HOST}:11434",
 }
 
 
-async def _probe_lmstudio(base_url: str) -> ProviderHealthResult:
+async def _probe_openai_compat(base_url: str) -> ProviderHealthResult:
+    """Probe any OpenAI-compatible local inference server (Aether Inference, LM Studio, etc.)."""
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             r = await client.get(f"{base_url}/v1/models")
@@ -78,6 +80,10 @@ async def _probe_lmstudio(base_url: str) -> ProviderHealthResult:
             return ProviderHealthResult(reachable=True, url=base_url, model_count=len(models))
     except Exception:
         return ProviderHealthResult(reachable=False, url=base_url)
+
+
+async def _probe_lmstudio(base_url: str) -> ProviderHealthResult:
+    return await _probe_openai_compat(base_url)
 
 
 async def _probe_ollama(base_url: str) -> ProviderHealthResult:
@@ -297,6 +303,9 @@ async def _fetch_provider_models(provider: str, api_key: str) -> FetchModelsResp
     if provider == "openrouter":
         models = await _fetch_openrouter_models_public()
         return FetchModelsResponse(models=models)
+    if provider == "aether-inference":
+        base_url = _LOCAL_PROVIDERS["aether-inference"]
+        return await _fetch_openai_models("aether", f"{base_url}/v1")
     if provider == "lmstudio":
         base_url = _LOCAL_PROVIDERS["lmstudio"]
         try:
@@ -342,12 +351,14 @@ async def _fetch_provider_models(provider: str, api_key: str) -> FetchModelsResp
     description="Checks whether LM Studio and Ollama are reachable on their default ports.",
 )
 async def providers_health() -> ProvidersHealthResponse:
-    lmstudio_result, ollama_result = await asyncio.gather(
+    aether_result, lmstudio_result, ollama_result = await asyncio.gather(
+        _probe_openai_compat(_LOCAL_PROVIDERS["aether-inference"]),
         _probe_lmstudio(_LOCAL_PROVIDERS["lmstudio"]),
         _probe_ollama(_LOCAL_PROVIDERS["ollama"]),
     )
     return ProvidersHealthResponse(
         providers={
+            "aether-inference": aether_result,
             "lmstudio": lmstudio_result,
             "ollama": ollama_result,
         }

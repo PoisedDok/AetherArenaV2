@@ -113,7 +113,7 @@ class TestLoadAgentConfig:
         config_dict = {"name": "code-reviewer", "description": "Code review agent", "model": "deepseek-v3"}
         _write_agent(tmp_path, "code-reviewer", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             cfg = load_agent_config("code-reviewer")
@@ -123,7 +123,7 @@ class TestLoadAgentConfig:
         assert cfg.model == "deepseek-v3"
 
     def test_load_missing_agent_raises(self, tmp_path):
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             with pytest.raises(FileNotFoundError):
@@ -133,7 +133,7 @@ class TestLoadAgentConfig:
         # Create directory without config.yaml
         (tmp_path / "agents" / "broken-agent").mkdir(parents=True)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             with pytest.raises(FileNotFoundError):
@@ -146,7 +146,7 @@ class TestLoadAgentConfig:
         (agent_dir / "config.yaml").write_text("description: My agent\n")
         (agent_dir / "SOUL.md").write_text("Hello")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             cfg = load_agent_config("inferred-name")
@@ -157,7 +157,7 @@ class TestLoadAgentConfig:
         config_dict = {"name": "restricted", "tool_groups": ["file:read", "file:write"]}
         _write_agent(tmp_path, "restricted", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             cfg = load_agent_config("restricted")
@@ -171,7 +171,7 @@ class TestLoadAgentConfig:
         (agent_dir / "config.yaml").write_text("name: legacy-agent\nprompt_file: system.md\n")
         (agent_dir / "SOUL.md").write_text("Soul content")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import load_agent_config
 
             cfg = load_agent_config("legacy-agent")
@@ -189,7 +189,7 @@ class TestLoadAgentSoul:
         expected_soul = "You are a specialized code review expert."
         _write_agent(tmp_path, "code-reviewer", {"name": "code-reviewer"}, soul=expected_soul)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="code-reviewer")
@@ -203,7 +203,7 @@ class TestLoadAgentSoul:
         (agent_dir / "config.yaml").write_text("name: no-soul\n")
         # No SOUL.md created
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="no-soul")
@@ -217,7 +217,7 @@ class TestLoadAgentSoul:
         (agent_dir / "config.yaml").write_text("name: empty-soul\n")
         (agent_dir / "SOUL.md").write_text("   \n   ")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="empty-soul")
@@ -233,7 +233,7 @@ class TestLoadAgentSoul:
 
 class TestListCustomAgents:
     def test_empty_when_no_agents_dir(self, tmp_path):
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
@@ -244,7 +244,7 @@ class TestListCustomAgents:
         _write_agent(tmp_path, "agent-a", {"name": "agent-a"})
         _write_agent(tmp_path, "agent-b", {"name": "agent-b", "description": "B"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
@@ -259,7 +259,7 @@ class TestListCustomAgents:
         # Invalid dir (no config.yaml)
         (tmp_path / "agents" / "invalid-dir").mkdir(parents=True)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
@@ -274,7 +274,7 @@ class TestListCustomAgents:
         (agents_dir / "not-a-dir.txt").write_text("hello")
         _write_agent(tmp_path, "real-agent", {"name": "real-agent"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
@@ -287,7 +287,7 @@ class TestListCustomAgents:
         _write_agent(tmp_path, "a-agent", {"name": "a-agent"})
         _write_agent(tmp_path, "m-agent", {"name": "m-agent"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+        with patch("aether.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
             from aether.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
@@ -308,8 +308,8 @@ class TestMemoryFilePath:
         from aether.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("aether.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
+            patch("aether.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             path = updater_mod._get_memory_file_path(None)
         assert path == tmp_path / "memory.json"
@@ -320,8 +320,8 @@ class TestMemoryFilePath:
         from aether.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("aether.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
+            patch("aether.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             path = updater_mod._get_memory_file_path("code-reviewer")
         assert path == tmp_path / "agents" / "code-reviewer" / "memory.json"
@@ -331,8 +331,8 @@ class TestMemoryFilePath:
         from aether.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("aether.agents.memory.updater.get_paths", return_value=_make_paths(tmp_path)),
+            patch("aether.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             path_global = updater_mod._get_memory_file_path(None)
             path_a = updater_mod._get_memory_file_path("agent-a")
@@ -364,7 +364,7 @@ def agent_client(tmp_path):
     """TestClient with agents router, using tmp_path as base_dir."""
     paths_instance = _make_paths(tmp_path)
 
-    with patch("deerflow.config.agents_config.get_paths", return_value=paths_instance), patch("app.gateway.routers.agents.get_paths", return_value=paths_instance):
+    with patch("aether.config.agents_config.get_paths", return_value=paths_instance), patch("app.gateway.routers.agents.get_paths", return_value=paths_instance):
         app = _make_test_app(tmp_path)
         with TestClient(app) as client:
             client._tmp_path = tmp_path  # type: ignore[attr-defined]
