@@ -18,12 +18,12 @@ AetherArena uses a YAML configuration file that should be placed in the **projec
    cp config.example.yaml config.yaml
    ```
 
-3. **Edit configuration**:
+3. **Point at your local model**:
    ```bash
-   # Option A: Set environment variables (recommended)
-   export OPENAI_API_KEY="your-key-here"
-
-   # Option B: Edit config.yaml directly
+   # Edit config.yaml and set base_url for your local provider:
+   # Aether Inference: http://localhost:7090/v1
+   # Ollama:           http://localhost:11434/v1
+   # LM Studio:        http://localhost:1234/v1
    vim config.yaml  # or your preferred editor
    ```
 

@@ -15,7 +15,7 @@ AetherArena knows you. It builds a persistent memory of your preferences, contex
 - **Private by default** — your conversations and memory stay on your machine
 - **Personalised** — long-term memory that grows with you across sessions
 - **Capable** — real tools: web search, code execution, file system, sandboxed runtime
-- **Model-agnostic** — plug in any OpenAI-compatible model: Aether Inference, Ollama, LM Studio, or any cloud API
+- **Local-first models** — runs on Aether Inference, Ollama, LM Studio, or any OpenAI-compatible local server. No data sent to the cloud unless you explicitly add a remote model.
 
 ---
 
@@ -59,17 +59,23 @@ Full setup guide → [`aether-arena/README.md`](./aether-arena/README.md)
 
 ## Aether Inference
 
-AetherArena ships with **Aether Inference** as a first-class local provider — a personal modular inference engine (OpenAI-compatible) on port `7090`. Add it to `config.yaml`:
+**Aether Inference** is AetherArena's personal on-device inference engine — a modular, OpenAI-compatible inference server that runs on your hardware on port `7090`. It's the default and recommended provider: everything stays on your machine, no account required.
+
+Configure it in `config.yaml`:
 
 ```yaml
 - name: aether
   display_name: Aether Inference
   use: aether.models.patched_openai:PatchedChatOpenAI
   model: local-model
+  api_key: aether
   base_url: http://localhost:7090/v1
+  max_tokens: 8192
+  supports_thinking: true
+  supports_vision: true
 ```
 
-It appears as its own tab in Settings with a live health dot, alongside Ollama and LM Studio.
+It appears as its own **Aether Inference** tab in Settings with a live health indicator — same as Ollama and LM Studio but for your own engine. Ollama (port 11434) and LM Studio (port 1234) are also supported out of the box.
 
 ---
 

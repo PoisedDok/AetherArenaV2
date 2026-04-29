@@ -57,100 +57,56 @@
 
    This command creates local configuration files based on the provided example templates.
 
-3. **Configure your preferred model(s)**
+3. **Point AetherArena at your local model**
 
-   Edit `config.yaml` and define at least one model:
+   Edit `config.yaml`. The recommended setup uses **Aether Inference** — the built-in local inference engine on port `7090` — or any OpenAI-compatible local server like Ollama or LM Studio. No API key required.
 
+   **Aether Inference** (recommended — your personal on-device engine):
    ```yaml
    models:
-     - name: gpt-4                       # Internal identifier
-       display_name: GPT-4               # Human-readable name
-       use: langchain_openai:ChatOpenAI  # LangChain class path
-       model: gpt-4                      # Model identifier for API
-       api_key: $OPENAI_API_KEY          # API key (recommended: use env var)
-       max_tokens: 4096                  # Maximum tokens per request
-       temperature: 0.7                  # Sampling temperature
-
-     - name: openrouter-gemini-2.5-flash
-       display_name: Gemini 2.5 Flash (OpenRouter)
-       use: langchain_openai:ChatOpenAI
-       model: google/gemini-2.5-flash-preview
-       api_key: $OPENAI_API_KEY          # OpenRouter still uses the OpenAI-compatible field name here
-       base_url: https://openrouter.ai/api/v1
-
-     - name: gpt-5-responses
-       display_name: GPT-5 (Responses API)
-       use: langchain_openai:ChatOpenAI
-       model: gpt-5
-       api_key: $OPENAI_API_KEY
-       use_responses_api: true
-       output_version: responses/v1
+     - name: aether
+       display_name: Aether Inference
+       use: aether.models.patched_openai:PatchedChatOpenAI
+       model: local-model
+       api_key: aether
+       base_url: http://localhost:7090/v1
+       max_tokens: 8192
+       temperature: 0.7
+       supports_thinking: true
+       supports_vision: true
    ```
 
-   OpenRouter and similar OpenAI-compatible gateways should be configured with `langchain_openai:ChatOpenAI` plus `base_url`. If you prefer a provider-specific environment variable name, point `api_key` at that variable explicitly (for example `api_key: $OPENROUTER_API_KEY`).
-
-   To route OpenAI models through `/v1/responses`, keep using `langchain_openai:ChatOpenAI` and set `use_responses_api: true` with `output_version: responses/v1`.
-
-   CLI-backed provider examples:
-
+   **Ollama** (pull and run open-weight models):
    ```yaml
    models:
-     - name: gpt-5.4
-       display_name: GPT-5.4 (Codex CLI)
-       use: aether.models.openai_codex_provider:CodexChatModel
-       model: gpt-5.4
-       supports_thinking: true
-       supports_reasoning_effort: true
-
-     - name: claude-sonnet-4.6
-       display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-       use: aether.models.claude_provider:ClaudeChatModel
-       model: claude-sonnet-4-6
+     - name: ollama-llama3
+       display_name: Llama 3 (Ollama)
+       use: aether.models.patched_openai:PatchedChatOpenAI
+       model: llama3
+       api_key: ollama
+       base_url: http://localhost:11434/v1
        max_tokens: 4096
-       supports_thinking: true
+       temperature: 0.7
    ```
 
-   - Codex CLI reads `~/.codex/auth.json`
-   - The Codex Responses endpoint currently rejects `max_tokens` and `max_output_tokens`, so `CodexChatModel` does not expose a request-level token cap
-   - Claude Code accepts `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`, `CLAUDE_CODE_CREDENTIALS_PATH`, or plaintext `~/.claude/.credentials.json`
-   - On macOS, AetherArena v2 does not probe Keychain automatically. Export Claude Code auth explicitly if needed:
-
-   ```bash
-   eval "$(python3 scripts/export_claude_code_oauth.py --print-export)"
-   ```
-   
-4. **Set API keys for your configured model(s)**
-
-   Choose one of the following methods:
-
-- Option A: Edit the `.env` file in the project root (Recommended)
-
-
-   ```bash
-   TAVILY_API_KEY=your-tavily-api-key
-   OPENAI_API_KEY=your-openai-api-key
-   # OpenRouter also uses OPENAI_API_KEY when your config uses langchain_openai:ChatOpenAI + base_url.
-   # Add other provider keys as needed
-   INFOQUEST_API_KEY=your-infoquest-api-key
-   ```
-
-- Option B: Export environment variables in your shell
-
-   ```bash
-   export OPENAI_API_KEY=your-openai-api-key
-   ```
-
-   For CLI-backed providers:
-   - Codex CLI: `~/.codex/auth.json`
-   - Claude Code OAuth: explicit env/file handoff or `~/.claude/.credentials.json`
-
-- Option C: Edit `config.yaml` directly (Not recommended for production)
-
+   **LM Studio** (load any GGUF locally):
    ```yaml
    models:
-     - name: gpt-4
-       api_key: your-actual-api-key-here  # Replace placeholder
+     - name: lmstudio
+       display_name: LM Studio
+       use: aether.models.patched_openai:PatchedChatOpenAI
+       model: local-model
+       api_key: lmstudio
+       base_url: http://localhost:1234/v1
+       max_tokens: 4096
+       temperature: 0.7
+       supports_thinking: true
+       supports_vision: true
    ```
+
+   All three appear as their own provider tabs in Settings with live health indicators. No API keys leave your machine.
+
+   > If you want to optionally connect a cloud model (OpenAI, Anthropic, etc.), the config format is the same — add a `base_url` and an `api_key` pointing to a `$ENV_VAR`. See `config.example.yaml` for examples.
 
 ### Running the Application
 
@@ -445,12 +401,17 @@ Memory updates now skip duplicate fact entries at apply time, so repeated prefer
 
 ## Recommended Models
 
-AetherArena v2 is model-agnostic — it works with any LLM that implements the OpenAI-compatible API. That said, it performs best with models that support:
+AetherArena works best with local models that stay on your machine. The three built-in local providers are detected and shown in Settings automatically:
 
-- **Long context windows** (100k+ tokens) for deep research and multi-step tasks
-- **Reasoning capabilities** for adaptive planning and complex decomposition
-- **Multimodal inputs** for image understanding and video comprehension
-- **Strong tool-use** for reliable function calling and structured outputs
+| Provider | Default port | Best for |
+|---|---|---|
+| **Aether Inference** | 7090 | Personal on-device engine, OpenAI-compatible |
+| **Ollama** | 11434 | Open-weight models (Llama, Mistral, Qwen, etc.) |
+| **LM Studio** | 1234 | GGUF models with a GUI |
+
+For best results, pick a model with tool-calling support and at least 8k context. Qwen2.5, Llama 3.x, Mistral, and Gemma 3 all work well. Vision support (`supports_vision: true`) is needed for the `view_image` tool.
+
+Cloud models (OpenAI, Anthropic, etc.) are supported via the same `base_url` + `api_key` config pattern — but they're entirely optional. Everything runs without them.
 
 ## Embedded Python Client
 

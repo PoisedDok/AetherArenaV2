@@ -19,122 +19,87 @@ Run `make config-upgrade` to merge new fields into your config.
 
 ### Models
 
-Configure the LLM models available to the agent:
+AetherArena is designed to run local models on your own hardware. Any OpenAI-compatible server works — no API keys leave your machine.
+
+#### Local providers (recommended)
+
+**Aether Inference** — AetherArena's personal on-device inference engine (port 7090):
 
 ```yaml
 models:
-  - name: gpt-4                    # Internal identifier
-    display_name: GPT-4            # Human-readable name
-    use: langchain_openai:ChatOpenAI  # LangChain class path
-    model: gpt-4                   # Model identifier for API
-    api_key: $OPENAI_API_KEY       # API key (use env var)
-    max_tokens: 4096               # Max tokens per request
-    temperature: 0.7               # Sampling temperature
-```
-
-**Supported Providers**:
-- OpenAI (`langchain_openai:ChatOpenAI`)
-- Anthropic (`langchain_anthropic:ChatAnthropic`)
-- DeepSeek (`langchain_deepseek:ChatDeepSeek`)
-- Claude Code OAuth (`aether.models.claude_provider:ClaudeChatModel`)
-- Codex CLI (`aether.models.openai_codex_provider:CodexChatModel`)
-- Any LangChain-compatible provider
-
-CLI-backed provider examples:
-
-```yaml
-models:
-  - name: gpt-5.4
-    display_name: GPT-5.4 (Codex CLI)
-    use: aether.models.openai_codex_provider:CodexChatModel
-    model: gpt-5.4
+  - name: aether
+    display_name: Aether Inference
+    use: aether.models.patched_openai:PatchedChatOpenAI
+    model: local-model
+    api_key: aether
+    base_url: http://localhost:7090/v1
+    max_tokens: 8192
+    temperature: 0.7
     supports_thinking: true
-    supports_reasoning_effort: true
-
-  - name: claude-sonnet-4.6
-    display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-    use: aether.models.claude_provider:ClaudeChatModel
-    model: claude-sonnet-4-6
-    max_tokens: 4096
-    supports_thinking: true
-```
-
-**Auth behavior for CLI-backed providers**:
-- `CodexChatModel` loads Codex CLI auth from `~/.codex/auth.json`
-- The Codex Responses endpoint currently rejects `max_tokens` and `max_output_tokens`, so `CodexChatModel` does not expose a request-level token cap
-- `ClaudeChatModel` accepts `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`, `CLAUDE_CODE_CREDENTIALS_PATH`, or plaintext `~/.claude/.credentials.json`
-- On macOS, AetherArena does not probe Keychain automatically. Use `scripts/export_claude_code_oauth.py` to export Claude Code auth explicitly when needed
-
-To use OpenAI's `/v1/responses` endpoint with LangChain, keep using `langchain_openai:ChatOpenAI` and set:
-
-```yaml
-models:
-  - name: gpt-5-responses
-    display_name: GPT-5 (Responses API)
-    use: langchain_openai:ChatOpenAI
-    model: gpt-5
-    api_key: $OPENAI_API_KEY
-    use_responses_api: true
-    output_version: responses/v1
-```
-
-For OpenAI-compatible gateways (for example Novita or OpenRouter), keep using `langchain_openai:ChatOpenAI` and set `base_url`:
-
-```yaml
-models:
-  - name: novita-deepseek-v3.2
-    display_name: Novita DeepSeek V3.2
-    use: langchain_openai:ChatOpenAI
-    model: deepseek/deepseek-v3.2
-    api_key: $NOVITA_API_KEY
-    base_url: https://api.novita.ai/openai
-    supports_thinking: true
-    when_thinking_enabled:
-      extra_body:
-        thinking:
-          type: enabled
-
-  - name: minimax-m2.5
-    display_name: MiniMax M2.5
-    use: langchain_openai:ChatOpenAI
-    model: MiniMax-M2.5
-    api_key: $MINIMAX_API_KEY
-    base_url: https://api.minimax.io/v1
-    max_tokens: 4096
-    temperature: 1.0  # MiniMax requires temperature in (0.0, 1.0]
     supports_vision: true
-
-  - name: minimax-m2.5-highspeed
-    display_name: MiniMax M2.5 Highspeed
-    use: langchain_openai:ChatOpenAI
-    model: MiniMax-M2.5-highspeed
-    api_key: $MINIMAX_API_KEY
-    base_url: https://api.minimax.io/v1
-    max_tokens: 4096
-    temperature: 1.0  # MiniMax requires temperature in (0.0, 1.0]
-    supports_vision: true
-  - name: openrouter-gemini-2.5-flash
-    display_name: Gemini 2.5 Flash (OpenRouter)
-    use: langchain_openai:ChatOpenAI
-    model: google/gemini-2.5-flash-preview
-    api_key: $OPENAI_API_KEY
-    base_url: https://openrouter.ai/api/v1
 ```
 
-If your OpenRouter key lives in a different environment variable name, point `api_key` at that variable explicitly (for example `api_key: $OPENROUTER_API_KEY`).
-
-**Thinking Models**:
-Some models support "thinking" mode for complex reasoning:
+**Ollama** — pull and run open-weight models locally (port 11434):
 
 ```yaml
 models:
-  - name: deepseek-v3
-    supports_thinking: true
-    when_thinking_enabled:
-      extra_body:
-        thinking:
-          type: enabled
+  - name: ollama-llama3
+    display_name: Llama 3 (Ollama)
+    use: aether.models.patched_openai:PatchedChatOpenAI
+    model: llama3
+    api_key: ollama
+    base_url: http://localhost:11434/v1
+    max_tokens: 4096
+    temperature: 0.7
 ```
+
+**LM Studio** — load any GGUF model via a local server (port 1234):
+
+```yaml
+models:
+  - name: lmstudio
+    display_name: LM Studio
+    use: aether.models.patched_openai:PatchedChatOpenAI
+    model: local-model
+    api_key: lmstudio
+    base_url: http://localhost:1234/v1
+    max_tokens: 4096
+    temperature: 0.7
+    supports_thinking: true
+    supports_vision: true
+```
+
+All three providers appear in Settings with a live health dot — no config beyond `base_url` is required.
+
+**Thinking models**: set `supports_thinking: true` and optionally configure `when_thinking_enabled` for providers that need extra body params:
+
+```yaml
+models:
+  - name: qwen-thinking
+    display_name: Qwen3 (thinking)
+    use: aether.models.patched_openai:PatchedChatOpenAI
+    model: qwen3
+    api_key: ollama
+    base_url: http://localhost:11434/v1
+    supports_thinking: true
+```
+
+#### Optional: cloud or remote models
+
+Any OpenAI-compatible remote endpoint works the same way — add `base_url` and an `api_key` referencing an environment variable:
+
+```yaml
+models:
+  - name: remote-example
+    display_name: My Remote Model
+    use: aether.models.patched_openai:PatchedChatOpenAI
+    model: model-id
+    api_key: $MY_API_KEY
+    base_url: https://my-provider.com/v1
+    max_tokens: 8192
+```
+
+Cloud models are entirely optional. AetherArena runs fully offline without them.
 
 ### Tool Groups
 
@@ -256,20 +221,20 @@ title:
 
 ## Environment Variables
 
-AetherArena supports environment variable substitution using the `$` prefix:
+AetherArena supports environment variable substitution using the `$` prefix in `config.yaml`:
 
 ```yaml
 models:
-  - api_key: $OPENAI_API_KEY  # Reads from environment
+  - api_key: $MY_API_KEY  # Reads from environment at startup
 ```
 
-**Common Environment Variables**:
-- `OPENAI_API_KEY` - OpenAI API key
-- `ANTHROPIC_API_KEY` - Anthropic API key
-- `DEEPSEEK_API_KEY` - DeepSeek API key
-- `NOVITA_API_KEY` - Novita API key (OpenAI-compatible endpoint)
-- `TAVILY_API_KEY` - Tavily search API key
-- `AETHER_ARENA_CONFIG_PATH` - Custom config file path
+**Common variables**:
+- `AETHER_ARENA_CONFIG_PATH` — custom config file path
+- `AETHER_ARENA_HOME` — runtime data directory
+- `SEARXNG_URL` — self-hosted SearXNG URL for web search
+- `TAVILY_API_KEY` — Tavily search API key (alternative to SearXNG)
+
+Local providers (Aether Inference, Ollama, LM Studio) don't require any API key variables — the `api_key` field in their config is just a placeholder string.
 
 ## Configuration Location
 
