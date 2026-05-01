@@ -321,6 +321,7 @@ export const enUS: Translations = {
     in_progress: "Running subtask",
     completed: "Subtask completed",
     failed: "Subtask failed",
+    timed_out: "Subtask timed out",
   },
 
   // Shortcuts

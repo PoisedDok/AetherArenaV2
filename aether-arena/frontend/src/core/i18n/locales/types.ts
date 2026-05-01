@@ -252,6 +252,7 @@ export interface Translations {
     in_progress: string;
     completed: string;
     failed: string;
+    timed_out: string;
   };
 
   // Shortcuts

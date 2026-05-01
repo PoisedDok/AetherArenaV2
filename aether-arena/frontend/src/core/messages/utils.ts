@@ -16,12 +16,15 @@ interface AssistantPresentFilesGroup extends GenericMessageGroup<"assistant:pres
 
 interface AssistantSubagentGroup extends GenericMessageGroup<"assistant:subagent"> {}
 
+interface AssistantInlineUIGroup extends GenericMessageGroup<"assistant:inline-ui"> {}
+
 type MessageGroup =
   | HumanMessageGroup
   | AssistantProcessingGroup
   | AssistantMessageGroup
   | AssistantPresentFilesGroup
-  | AssistantSubagentGroup;
+  | AssistantSubagentGroup
+  | AssistantInlineUIGroup;
 
 export function groupMessages<T>(
   messages: Message[],
@@ -68,6 +71,19 @@ export function groupMessages<T>(
     }
 
     if (message.type === "ai") {
+      const onlyRenderUI =
+        hasRenderUI(message) &&
+        (message.tool_calls ?? []).every((tc) => tc.name === "render_ui");
+
+      if (onlyRenderUI) {
+        groups.push({
+          id: message.id,
+          type: "assistant:inline-ui",
+          messages: [message],
+        });
+        continue;
+      }
+
       // A message may have present_files alongside other tool calls (write_file, bash, etc.).
       // Only route to present-files group when it is the SOLE tool call — otherwise treat
       // it as a normal processing step so all tool calls remain visible in the trace.
@@ -284,6 +300,14 @@ export function extractPresentFilesFromMessage(message: Message) {
     }
   }
   return files;
+}
+
+export function hasRenderUI(message: Message) {
+  return (
+    message.type === "ai" &&
+    (message.tool_calls ?? []).length === 1 &&
+    message.tool_calls![0]!.name === "render_ui"
+  );
 }
 
 export function hasSubagent(message: AIMessage) {
