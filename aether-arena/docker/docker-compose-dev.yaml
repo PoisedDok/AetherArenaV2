@@ -76,9 +76,33 @@ services:
         condition: service_started
       searxng:
         condition: service_healthy
+      obscura:
+        condition: service_healthy
     networks:
       - aether-arena-dev
     restart: unless-stopped
+
+  # ── Obscura — self-hosted stealth headless browser (Apache-2.0) ────────────
+  # In dev the CDP port is also published to the host (9222) so you can connect
+  # Chrome DevTools or Playwright directly against it while debugging.
+  obscura:
+    build:
+      context: ../obscura
+      dockerfile: Dockerfile
+    container_name: aether-arena-obscura
+    restart: unless-stopped
+    ports:
+      - "9222:9222"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'printf "GET /json/version HTTP/1.0\r\nHost: localhost\r\n\r\n" | nc -w2 localhost 9222 | grep -q "Obscura"'
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    networks:
+      - aether-arena-dev
 
   # SearXNG (AGPL-3.0) — host :2030 → container :8080 (image listens on 8080 internally)
   searxng:
@@ -143,17 +167,17 @@ services:
     container_name: aether-arena-gateway
     command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --reload --reload-include='*.yaml .env' > /app/logs/gateway.log 2>&1"
     volumes:
-      - ../backend/:/app/backend/
-      # Preserve the .venv built during Docker image build — mounting the full backend/
-      # directory above would otherwise shadow it with the (empty) host directory.
+      # Mount the entire project root as /app/ — single directory mount avoids the macOS
+      # Docker Desktop limitation where file-level bind mounts from external drives silently
+      # fail (directory mounts work; individual file mounts do not).
+      # This gives the container: backend/, config.yaml, extensions_config.json, skills/, logs/
+      - ../:/app/
+      # Preserve the .venv built during Docker image build — the project root mount above
+      # would otherwise shadow it with the (empty) host backend/ directory.
       - gateway-venv:/app/backend/.venv
-      - ../config.yaml:/app/config.yaml
-      - ../extensions_config.json:/app/extensions_config.json
-      - ../skills:/app/skills
-      - ../logs:/app/logs
       # Mount uv cache for faster dependency installation
       - ~/.cache/uv:/root/.cache/uv
-      # DooD: same as gateway — AioSandboxProvider runs inside LangGraph process.
+      # DooD: AioSandboxProvider starts sandbox containers via host Docker daemon
       - /var/run/docker.sock:/var/run/docker.sock
       # CLI auth directories for auto-auth (Claude Code + Codex CLI)
       - type: bind
@@ -176,6 +200,8 @@ services:
       - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       # config.yaml harness tool `url: $SEARXNG_URL`
       - SEARXNG_URL=http://searxng:8080
+      # Obscura CDP server (used by config.yaml $OBSCURA_URL substitution)
+      - OBSCURA_URL=http://obscura:9222
       - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_ROOT}/backend/.aether-arena
       - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_ROOT}/skills
       - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
@@ -204,17 +230,13 @@ services:
     container_name: aether-arena-langgraph
     command: sh -c "cd backend && uv run langgraph dev --no-browser --allow-blocking --host 0.0.0.0 --port 2024 > /app/logs/langgraph.log 2>&1"
     volumes:
-      - ../backend/:/app/backend/
-      # Preserve the .venv built during Docker image build — mounting the full backend/
-      # directory above would otherwise shadow it with the (empty) host directory.
+      # Single project-root directory mount — see gateway service comment for rationale.
+      - ../:/app/
+      # Preserve the .venv built during Docker image build.
       - langgraph-venv:/app/backend/.venv
-      - ../config.yaml:/app/config.yaml
-      - ../extensions_config.json:/app/extensions_config.json
-      - ../skills:/app/skills
-      - ../logs:/app/logs
       # Mount uv cache for faster dependency installation
       - ~/.cache/uv:/root/.cache/uv
-      # DooD: same as gateway — AioSandboxProvider runs inside LangGraph process.
+      # DooD: AioSandboxProvider starts sandbox containers via host Docker daemon
       - /var/run/docker.sock:/var/run/docker.sock
       # CLI auth directories for auto-auth (Claude Code + Codex CLI)
       - type: bind
@@ -235,6 +257,8 @@ services:
       - AETHER_ARENA_CONFIG_PATH=/app/config.yaml
       - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - SEARXNG_URL=http://searxng:8080
+      # Obscura CDP server (used by config.yaml $OBSCURA_URL substitution)
+      - OBSCURA_URL=http://obscura:9222
       - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_ROOT}/backend/.aether-arena
       - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_ROOT}/skills
       - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
@@ -263,4 +287,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 192.168.200.0/24
+        - subnet: 192.168.201.0/24

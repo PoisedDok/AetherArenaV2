@@ -160,9 +160,9 @@ start() {
     sandbox_mode="$(detect_sandbox_mode)"
 
     if [ "$sandbox_mode" = "provisioner" ]; then
-        services="frontend gateway langgraph provisioner nginx"
+        services="searxng obscura frontend gateway langgraph provisioner nginx"
     else
-        services="frontend gateway langgraph nginx"
+        services="searxng obscura frontend gateway langgraph nginx"
     fi
 
     echo -e "${BLUE}Detected sandbox mode: $sandbox_mode${NC}"

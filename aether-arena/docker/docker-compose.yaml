@@ -39,9 +39,37 @@ services:
         condition: service_started
       searxng:
         condition: service_healthy
+      obscura:
+        condition: service_healthy
     networks:
       - aether-arena
     restart: unless-stopped
+
+  # ── Obscura — self-hosted stealth headless browser (Apache-2.0) ────────────
+  # Serves a Chrome DevTools Protocol (CDP) WebSocket on port 9222 (internal
+  # only — never routed through nginx). The Python web_fetch_tool connects to
+  # it to render JS-heavy pages with anti-fingerprinting enabled, replacing
+  # the plain-HTTP fetch that gets blocked by Cloudflare/WAFs.
+  obscura:
+    build:
+      context: ../obscura
+      dockerfile: Dockerfile
+    container_name: aether-arena-obscura
+    restart: unless-stopped
+    # Port 9222 is intentionally NOT published to the host. It is only
+    # reachable by other services on the aether-arena network.
+    expose:
+      - "9222"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'printf "GET /json/version HTTP/1.0\r\nHost: localhost\r\n\r\n" | nc -w2 localhost 9222 | grep -q "Obscura"'
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    networks:
+      - aether-arena
 
   # ── SearXNG (AGPL-3.0) — self-hosted web search backend ────────────────────
   searxng:
@@ -94,8 +122,8 @@ services:
     container_name: aether-arena-gateway
     command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --workers 2"
     volumes:
-      - ${AETHER_ARENA_CONFIG_PATH}:/app/backend/config.yaml:ro
-      - ${AETHER_ARENA_EXTENSIONS_CONFIG_PATH}:/app/backend/extensions_config.json:ro
+      - ../config.yaml:/app/backend/config.yaml:ro
+      - ../extensions_config.json:/app/backend/extensions_config.json:ro
       - ../skills:/app/skills:ro
       - ${AETHER_ARENA_HOME}:/app/backend/.aether-arena
       # DooD: AioSandboxProvider starts sandbox containers via host Docker daemon
@@ -117,12 +145,16 @@ services:
     environment:
       - CI=true
       - AETHER_ARENA_HOME=/app/backend/.aether-arena
+      - AETHER_ARENA_CONFIG_PATH=/app/backend/config.yaml
+      - AETHER_ARENA_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
       # DooD path/network translation
       - AETHER_ARENA_HOST_BASE_DIR=${AETHER_ARENA_HOME}
       - AETHER_ARENA_HOST_SKILLS_PATH=${AETHER_ARENA_REPO_ROOT}/skills
       - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # SearXNG internal URL (used by config.yaml $SEARXNG_URL substitution)
       - SEARXNG_URL=http://searxng:8080
+      # Obscura CDP server (used by config.yaml $OBSCURA_URL substitution)
+      - OBSCURA_URL=http://obscura:9222
       # LangGraph Server connection (for compact endpoint)
       - LANGGRAPH_BASE_URL=http://langgraph:2024
     env_file:
@@ -143,8 +175,8 @@ services:
     container_name: aether-arena-langgraph
     command: sh -c "cd /app/backend && uv run langgraph dev --no-browser --allow-blocking --no-reload --host 0.0.0.0 --port 2024"
     volumes:
-      - ${AETHER_ARENA_CONFIG_PATH}:/app/config.yaml:ro
-      - ${AETHER_ARENA_EXTENSIONS_CONFIG_PATH}:/app/extensions_config.json:ro
+      - ../config.yaml:/app/config.yaml:ro
+      - ../extensions_config.json:/app/extensions_config.json:ro
       - ${AETHER_ARENA_HOME}:/app/backend/.aether-arena
       - ../skills:/app/skills:ro
       - ../backend/.langgraph_api:/app/backend/.langgraph_api
@@ -173,6 +205,8 @@ services:
       - AETHER_ARENA_SANDBOX_HOST=host.docker.internal
       # SearXNG internal URL (used by config.yaml $SEARXNG_URL substitution)
       - SEARXNG_URL=http://searxng:8080
+      # Obscura CDP server (used by config.yaml $OBSCURA_URL substitution)
+      - OBSCURA_URL=http://obscura:9222
       # Disable LangSmith tracing — LANGSMITH_API_KEY is not required.
       # Set LANGCHAIN_TRACING_V2=true and LANGSMITH_API_KEY in .env to enable.
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
