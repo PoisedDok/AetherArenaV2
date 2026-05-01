@@ -45,7 +45,7 @@ aether-arena/
 │   │           ├── models/            # Model factory with thinking/vision support
 │   │           ├── skills/            # Skills discovery, loading, parsing
 │   │           ├── config/            # Configuration system (app, model, sandbox, tool, etc.)
-│   │           ├── community/         # Community tools (tavily, jina_ai, firecrawl, image_search, aio_sandbox)
+│   │           ├── community/         # Community tools (searxng, obscura, image_search, aio_sandbox; cloud providers moved to disabled/)
 │   │           ├── reflection/        # Dynamic module loading (resolve_variable, resolve_class)
 │   │           ├── utils/             # Utilities (network, readability)
 │   │           └── client.py          # Embedded Python client (AetherArenaClient)
@@ -254,10 +254,11 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
    - `task` - Delegate to subagent (description, prompt, subagent_type, max_turns)
 
 **Community tools** (`packages/harness/aether/community/`):
-- `tavily/` - Web search (5 results default) and web fetch (4KB limit)
-- `jina_ai/` - Web fetch via Jina reader API with readability extraction
-- `firecrawl/` - Web scraping via Firecrawl API
-- `image_search/` - Image search via DuckDuckGo
+- `searxng/` - Web search via self-hosted SearXNG meta-search (AGPL-3.0); `web_search_tool` is the active search backend
+- `obscura/` - Web fetch via self-hosted Obscura stealth headless browser (Apache-2.0); `web_fetch_tool` renders JS pages with anti-fingerprinting over CDP WebSocket
+- `image_search/` - Image search via DuckDuckGo (free, no API key)
+- `aio_sandbox/` - Docker-based isolated execution provider (alternative to local sandbox)
+- `disabled/` - Cloud-dependent providers moved here (tavily, firecrawl, jina_ai, infoquest); not loaded by any active config
 
 ### MCP System (`packages/harness/aether/mcp/`)
 
@@ -412,12 +413,23 @@ Both can be modified at runtime via Gateway API endpoints or `AetherArenaClient`
 - If a module causes circular import issues in tests, add a `sys.modules` mock in `tests/conftest.py` (see existing example for `aether.subagents.executor`)
 
 ```bash
-# Run all tests
+# Run all tests (uses Makefile — invokes PYTHONPATH=. uv run pytest)
 make test
 
-# Run a specific test file
-PYTHONPATH=. uv run pytest tests/test_<feature>.py -v
+# Run a specific test file — use the project venv Python directly to avoid
+# host pyenv conflicts (the pyenv Python 3.11 does not have project deps).
+# Always run from backend/ so conftest.py's sys.path insertion works.
+.venv/bin/python -m pytest tests/test_<feature>.py -v
+
+# Example:
+.venv/bin/python -m pytest tests/test_obscura_tool.py -v
 ```
+
+> **Note on Python environment**: `uv run` may pick up a host pyenv Python (3.11)
+> instead of the project venv (3.12) when `VIRTUAL_ENV` is set in the shell.
+> Use `.venv/bin/python -m pytest` directly from `backend/` to always get the
+> correct interpreter. `make test` is unaffected because it forces `PYTHONPATH=.`
+> and runs inside the uv workspace.
 
 ### Running the Full Application
 
