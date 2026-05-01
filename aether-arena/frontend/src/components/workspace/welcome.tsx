@@ -250,11 +250,12 @@ function useTypewriter(pool: string[], onCycleComplete: () => Promise<void>) {
 // ---------------------------------------------------------------------------
 export function Welcome({ className }: { className?: string }) {
   const displayName = useResolvedDisplayName();
-  const [hour, setHour] = useState(() => new Date().getHours());
+  const [hour, setHour] = useState(0);
   const [tick, setTick] = useState(0);
   const [guru, setGuru] = useState<Guru | null>(null);
 
   useEffect(() => {
+    setHour(new Date().getHours());
     const id = setInterval(() => setHour(new Date().getHours()), 60_000);
     return () => clearInterval(id);
   }, []);

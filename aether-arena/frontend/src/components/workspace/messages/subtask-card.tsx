@@ -3,6 +3,7 @@ import {
   CheckCircleIcon,
   ChevronUp,
   ClipboardListIcon,
+  ClockIcon,
   Loader2Icon,
   WrenchIcon,
   XCircleIcon,
@@ -49,6 +50,8 @@ export function SubtaskCard({
       return <CheckCircleIcon className="size-3" />;
     } else if (task.status === "failed") {
       return <XCircleIcon className="size-3 text-red-500" />;
+    } else if (task.status === "timed_out") {
+      return <ClockIcon className="size-3 text-amber-500" />;
     } else if (task.status === "in_progress") {
       return <Loader2Icon className="size-3 animate-spin" />;
     }
@@ -230,6 +233,12 @@ export function SubtaskCard({
             <ChainOfThoughtStep
               label={<div className="text-red-500">{task.error}</div>}
               icon={<XCircleIcon className="size-4 text-red-500" />}
+            ></ChainOfThoughtStep>
+          )}
+          {task.status === "timed_out" && (
+            <ChainOfThoughtStep
+              label={<div className="text-amber-500">{task.error}</div>}
+              icon={<ClockIcon className="size-4 text-amber-500" />}
             ></ChainOfThoughtStep>
           )}
         </ChainOfThoughtContent>

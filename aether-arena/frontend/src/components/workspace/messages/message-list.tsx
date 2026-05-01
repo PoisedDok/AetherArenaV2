@@ -22,6 +22,7 @@ import { useUpdateSubtask } from "@/core/tasks/context";
 import type { AgentThreadState } from "@/core/threads";
 import { cn } from "@/lib/utils";
 
+import { InlineApp } from "@/components/ai-elements/inline-app";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
@@ -62,172 +63,232 @@ export function MessageList({
   // stay mounted throughout the compact lifecycle.
   const compactActive = compactState.status !== "idle";
 
-
-  if (thread.isThreadLoading && messages.length === 0 && !hasEverLoadedRef.current && !compactActive) {
+  if (
+    thread.isThreadLoading &&
+    messages.length === 0 &&
+    !hasEverLoadedRef.current &&
+    !compactActive
+  ) {
     return <MessageListSkeleton />;
   }
+
   return (
     <Conversation
       className={cn("flex size-full flex-col justify-center", className)}
     >
       <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-12">
-        {groupMessages(messages, (group) => {
-          if (group.type === "human" || group.type === "assistant") {
-            return group.messages.map((msg) => {
-              if (group.type === "human" && isCompactBoundaryContent(msg.content)) {
+        {(() => {
+          // NOTE: this relies on groupMessages invoking the callback synchronously.
+          let prevGroupType: string | null = null;
+          return groupMessages(messages, (group) => {
+            const isPostSubagent = prevGroupType === "assistant:subagent";
+            prevGroupType = group.type;
+
+            if (group.type === "human" || group.type === "assistant") {
+              const isSynthesis = group.type === "assistant" && isPostSubagent;
+              return group.messages.map((msg) => {
+                if (
+                  group.type === "human" &&
+                  isCompactBoundaryContent(msg.content)
+                ) {
+                  return (
+                    <CompactBoundary
+                      key={`${group.id}/${msg.id}`}
+                      content={msg.content as string}
+                    />
+                  );
+                }
                 return (
-                  <CompactBoundary
+                  <div
                     key={`${group.id}/${msg.id}`}
-                    content={msg.content as string}
-                  />
+                    className={
+                      isSynthesis ? "border-l-2 border-primary/30 pl-3" : ""
+                    }
+                  >
+                    {isSynthesis && (
+                      <span className="text-muted-foreground mb-2 block text-xs">
+                        Synthesis
+                      </span>
+                    )}
+                    <MessageListItem
+                      message={msg}
+                      isLoading={thread.isLoading}
+                    />
+                  </div>
                 );
+              });
+            }
+
+            if (group.type === "assistant:present-files") {
+              const files: string[] = [];
+              for (const message of group.messages) {
+                if (hasPresentFiles(message)) {
+                  const presentFiles = extractPresentFilesFromMessage(message);
+                  files.push(...presentFiles);
+                }
               }
               return (
-                <MessageListItem
-                  key={`${group.id}/${msg.id}`}
-                  message={msg}
-                  isLoading={thread.isLoading}
-                />
-              );
-            });
-          } else if (group.type === "assistant:present-files") {
-            const files: string[] = [];
-            for (const message of group.messages) {
-              if (hasPresentFiles(message)) {
-                const presentFiles = extractPresentFilesFromMessage(message);
-                files.push(...presentFiles);
-              }
-            }
-            return (
-              <div className="w-full" key={group.id}>
-                {group.messages[0] && hasContent(group.messages[0]) && (
-                  <MarkdownContent
-                    content={extractContentFromMessage(group.messages[0])}
-                    isLoading={thread.isLoading}
-                    rehypePlugins={rehypePlugins}
-                    className="mb-4"
-                  />
-                )}
-                <ArtifactFileList files={files} threadId={threadId} />
-              </div>
-            );
-          } else if (group.type === "assistant:subagent") {
-            const tasks = new Set<Subtask>();
-            for (const message of group.messages) {
-              if (message.type === "ai") {
-                for (const toolCall of message.tool_calls ?? []) {
-                  if (toolCall.name === "task") {
-                    const task: Subtask = {
-                      id: toolCall.id!,
-                      subagent_type: toolCall.args.subagent_type,
-                      description: toolCall.args.description,
-                      prompt: toolCall.args.prompt,
-                      status: "in_progress",
-                    };
-                    updateSubtask(task);
-                    tasks.add(task);
-                  }
-                }
-              } else if (message.type === "tool") {
-                const taskId = message.tool_call_id;
-                if (taskId) {
-                  const result = extractTextFromMessage(message);
-                  if (result.startsWith("Task Succeeded. Result:")) {
-                    updateSubtask({
-                      id: taskId,
-                      status: "completed",
-                      result: result
-                        .split("Task Succeeded. Result:")[1]
-                        ?.trim(),
-                    });
-                  } else if (result.startsWith("Task failed.")) {
-                    updateSubtask({
-                      id: taskId,
-                      status: "failed",
-                      error: result.split("Task failed.")[1]?.trim(),
-                    });
-                  } else if (result.startsWith("Task timed out")) {
-                    updateSubtask({
-                      id: taskId,
-                      status: "failed",
-                      error: result,
-                    });
-                  } else {
-                    updateSubtask({
-                      id: taskId,
-                      status: "in_progress",
-                    });
-                  }
-                }
-              }
-            }
-            const results: React.ReactNode[] = [];
-            for (const message of group.messages.filter(
-              (message) => message.type === "ai",
-            )) {
-              // Render reasoning if present
-              if (hasReasoning(message)) {
-                results.push(
-                  <MessageGroup
-                    key={"thinking-group-" + message.id}
-                    messages={[message]}
-                    isLoading={thread.isLoading}
-                  />,
-                );
-              }
-              // Render text content between subtask calls (was lost before)
-              if (hasContent(message)) {
-                const content = extractContentFromMessage(message);
-                if (content) {
-                  results.push(
+                <div className="w-full" key={group.id}>
+                  {group.messages[0] && hasContent(group.messages[0]) && (
                     <MarkdownContent
-                      key={"subtask-text-" + message.id}
-                      content={content}
+                      content={extractContentFromMessage(group.messages[0])}
                       isLoading={thread.isLoading}
                       rehypePlugins={rehypePlugins}
-                      className="my-2"
+                      className="mb-4"
+                    />
+                  )}
+                  <ArtifactFileList files={files} threadId={threadId} />
+                </div>
+              );
+            }
+
+            if (group.type === "assistant:subagent") {
+              // FIX: track task IDs separately from the Set so that
+              // updateSubtask calls (which update context) don't cause the
+              // displayed count to fall out of sync with the rendered cards.
+              const taskIds: string[] = [];
+
+              for (const message of group.messages) {
+                if (message.type === "ai") {
+                  for (const toolCall of message.tool_calls ?? []) {
+                    if (toolCall.name === "task") {
+                      const task: Subtask = {
+                        id: toolCall.id!,
+                        subagent_type: toolCall.args.subagent_type,
+                        description: toolCall.args.description,
+                        prompt: toolCall.args.prompt,
+                        status: "in_progress",
+                      };
+                      updateSubtask(task);
+                      taskIds.push(toolCall.id!);
+                    }
+                  }
+                } else if (message.type === "tool") {
+                  const taskId = message.tool_call_id;
+                  if (taskId) {
+                    const result = extractTextFromMessage(message);
+                    if (result.startsWith("Task Succeeded. Result:")) {
+                      updateSubtask({
+                        id: taskId,
+                        status: "completed",
+                        result: result
+                          .split("Task Succeeded. Result:")[1]
+                          ?.trim(),
+                      });
+                    } else if (result.startsWith("Task failed.")) {
+                      updateSubtask({
+                        id: taskId,
+                        status: "failed",
+                        error: result.split("Task failed.")[1]?.trim(),
+                      });
+                    } else if (result.startsWith("Task timed out")) {
+                      updateSubtask({
+                        id: taskId,
+                        status: "timed_out",
+                        error: result,
+                      });
+                    } else {
+                      updateSubtask({
+                        id: taskId,
+                        status: "in_progress",
+                      });
+                    }
+                  }
+                }
+              }
+
+              const results: React.ReactNode[] = [];
+              for (const message of group.messages.filter(
+                (message) => message.type === "ai",
+              )) {
+                // Render reasoning if present
+                if (hasReasoning(message)) {
+                  results.push(
+                    <MessageGroup
+                      key={"thinking-group-" + message.id}
+                      messages={[message]}
+                      isLoading={thread.isLoading}
+                    />,
+                  );
+                }
+
+                // Render text content between subtask calls
+                if (hasContent(message)) {
+                  const content = extractContentFromMessage(message);
+                  if (content) {
+                    results.push(
+                      <MarkdownContent
+                        key={"subtask-text-" + message.id}
+                        content={content}
+                        isLoading={thread.isLoading}
+                        rehypePlugins={rehypePlugins}
+                        className="my-2"
+                      />,
+                    );
+                  }
+                }
+
+                // FIX: use taskIds.length (derived from the current AI message's
+                // tool_calls) instead of the shared Set so the count is accurate.
+                const msgTaskIds =
+                  message.tool_calls?.map((tc) => tc.id).filter(Boolean) ?? [];
+
+                results.push(
+                  <div
+                    key={"subtask-count-" + message.id}
+                    // FIX: was "font-norma" (typo) — corrected to "font-normal"
+                    className="text-muted-foreground font-normal pt-2 text-sm"
+                  >
+                    {t.subtasks.executing(msgTaskIds.length)}
+                  </div>,
+                );
+
+                for (const taskId of msgTaskIds) {
+                  results.push(
+                    <SubtaskCard
+                      key={"task-group-" + taskId}
+                      taskId={taskId!}
+                      isLoading={thread.isLoading}
                     />,
                   );
                 }
               }
-              results.push(
+
+              return (
                 <div
-                  key={"subtask-count-" + message.id}
-                  className="text-muted-foreground font-norma pt-2 text-sm"
+                  key={"subtask-group-" + group.id}
+                  className="relative z-1 flex flex-col gap-2"
                 >
-                  {t.subtasks.executing(tasks.size)}
-                </div>,
+                  {results}
+                </div>
               );
-              const taskIds = message.tool_calls?.map(
-                (toolCall) => toolCall.id,
-              );
-              for (const taskId of taskIds ?? []) {
-                results.push(
-                  <SubtaskCard
-                    key={"task-group-" + taskId}
-                    taskId={taskId!}
-                    isLoading={thread.isLoading}
-                  />,
-                );
-              }
             }
+
+            if (group.type === "assistant:inline-ui") {
+              const aiMsg = group.messages[0];
+              if (aiMsg?.type !== "ai") return null;
+              const toolCall = aiMsg.tool_calls?.[0];
+              if (!toolCall) return null;
+              const url = toolCall.args?.url as string | undefined;
+              const title = toolCall.args?.title as string | undefined;
+              if (!url) return null;
+              return (
+                <div key={group.id} className="w-full">
+                  <InlineApp url={url} title={title} />
+                </div>
+              );
+            }
+
             return (
-              <div
-                key={"subtask-group-" + group.id}
-                className="relative z-1 flex flex-col gap-2"
-              >
-                {results}
-              </div>
+              <MessageGroup
+                key={"group-" + group.id}
+                messages={group.messages}
+                isLoading={thread.isLoading}
+              />
             );
-          }
-          return (
-            <MessageGroup
-              key={"group-" + group.id}
-              messages={group.messages}
-              isLoading={thread.isLoading}
-            />
-          );
-        })}
+          });
+        })()}
+
         {/* CompactingCard — appears while compact is in progress */}
         <CompactingCard />
         {thread.isLoading && <StreamingIndicator className="my-4" />}
