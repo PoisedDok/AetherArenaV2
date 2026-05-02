@@ -425,6 +425,48 @@ class TestRunWebFetch:
 
         assert "error" in result.lower()
 
+    @patch("aether.community.obscura.tools._http_fallback_fetch")
+    @patch("aether.community.obscura.tools._obscura_fetch")
+    def test_timeout_triggers_http_fallback_success(self, mock_fetch, mock_fallback, tmp_path):
+        """When Obscura times out, _http_fallback_fetch is tried and on success saves the file."""
+        async def _timeout(*a, **kw):
+            return (None, "Error: Timed out after 15s fetching https://example.com via Obscura.")
+        mock_fetch.side_effect = _timeout
+        mock_fallback.return_value = ("# Fallback content from plain HTTP fetch here.", None)
+
+        result = _run_web_fetch(
+            url="https://example.com",
+            workspace=str(tmp_path),
+            obscura_url="http://localhost:9222",
+            timeout=15,
+        )
+
+        mock_fallback.assert_called_once()
+        assert "virtual_path" in result.lower() or "Virtual path" in result
+        written = list((tmp_path / "web_fetched").glob("*.md"))
+        assert len(written) == 1
+        assert "Fallback" in written[0].read_text()
+
+    @patch("aether.community.obscura.tools._http_fallback_fetch")
+    @patch("aether.community.obscura.tools._obscura_fetch")
+    def test_timeout_with_failed_fallback_returns_original_error(self, mock_fetch, mock_fallback, tmp_path):
+        """When Obscura times out AND fallback also fails, return the Obscura timeout error."""
+        timeout_err = "Error: Timed out after 15s fetching https://example.com via Obscura. Try: (1) web_search"
+        async def _timeout(*a, **kw):
+            return (None, timeout_err)
+        mock_fetch.side_effect = _timeout
+        mock_fallback.return_value = (None, "HTTP fallback also failed: 403")
+
+        result = _run_web_fetch(
+            url="https://example.com",
+            workspace=str(tmp_path),
+            obscura_url="http://localhost:9222",
+            timeout=15,
+        )
+
+        assert "timed out" in result.lower() or "timeout" in result.lower()
+        assert "web_search" in result.lower() or "Try" in result
+
 
 # ---------------------------------------------------------------------------
 # _obscura_extract  (DOM.querySelector + DOM.getOuterHTML)

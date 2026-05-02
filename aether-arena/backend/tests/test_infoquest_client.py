@@ -3,8 +3,16 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from aether.community.infoquest import tools
-from aether.community.infoquest.infoquest_client import InfoQuestClient
+import pytest
+
+try:
+    from aether.community.infoquest import tools
+    from aether.community.infoquest.infoquest_client import InfoQuestClient
+    _INFOQUEST_AVAILABLE = True
+except ModuleNotFoundError:
+    _INFOQUEST_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(not _INFOQUEST_AVAILABLE, reason="aether.community.infoquest not available (moved to disabled/)")
 
 
 class TestInfoQuestClient:
