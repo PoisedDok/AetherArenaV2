@@ -31,6 +31,7 @@ class SubagentStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -485,7 +486,7 @@ def cleanup_background_task(task_id: str) -> None:
     Should be called by task_tool after it finishes polling and returns the result.
     This prevents memory leaks from accumulated completed tasks.
 
-    Only removes tasks that are in a terminal state (COMPLETED/FAILED/TIMED_OUT)
+    Only removes tasks that are in a terminal state (COMPLETED/FAILED/TIMED_OUT/CANCELLED)
     to avoid race conditions with the background executor still updating the task entry.
 
     Args:
@@ -504,6 +505,7 @@ def cleanup_background_task(task_id: str) -> None:
             SubagentStatus.COMPLETED,
             SubagentStatus.FAILED,
             SubagentStatus.TIMED_OUT,
+            SubagentStatus.CANCELLED,
         }
         if is_terminal_status or result.completed_at is not None:
             del _background_tasks[task_id]
@@ -514,3 +516,28 @@ def cleanup_background_task(task_id: str) -> None:
                 task_id,
                 result.status.value if hasattr(result.status, "value") else result.status,
             )
+
+
+def cancel_background_task(task_id: str) -> bool:
+    """Cancel a running background task.
+
+    Marks the task as CANCELLED and cleans it up immediately. The executor
+    thread may continue running until it naturally completes, but its result
+    will be discarded since the entry has been removed from _background_tasks.
+
+    Args:
+        task_id: The task ID to cancel.
+
+    Returns:
+        True if the task was found and cancelled, False if not found.
+    """
+    with _background_tasks_lock:
+        result = _background_tasks.get(task_id)
+        if result is None:
+            logger.debug("Requested cancel for unknown background task %s", task_id)
+            return False
+        result.status = SubagentStatus.CANCELLED
+        result.completed_at = result.completed_at or __import__("datetime").datetime.now()
+        del _background_tasks[task_id]
+        logger.info("Cancelled background task: %s", task_id)
+        return True

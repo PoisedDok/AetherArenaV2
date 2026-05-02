@@ -4,7 +4,7 @@ from langchain.tools import BaseTool
 
 from aether.config import get_app_config
 from aether.reflection import resolve_variable
-from aether.tools.builtins import present_file_tool, render_ui_tool, task_tool, view_image_tool
+from aether.tools.builtins import present_file_tool, render_html_tool, render_ui_tool, task_tool, view_image_tool
 from aether.tools.builtins.tool_search import reset_deferred_registry
 
 logger = logging.getLogger(__name__)
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 BUILTIN_TOOLS = [
     present_file_tool,
     render_ui_tool,
+    render_html_tool,
 ]
 
 SUBAGENT_TOOLS = [
