@@ -73,7 +73,7 @@ export function groupMessages<T>(
     if (message.type === "ai") {
       const onlyRenderUI =
         hasRenderUI(message) &&
-        (message.tool_calls ?? []).every((tc) => tc.name === "render_ui");
+        (message.tool_calls ?? []).every((tc) => RENDER_UI_TOOLS.has(tc.name));
 
       if (onlyRenderUI) {
         groups.push({
@@ -302,11 +302,13 @@ export function extractPresentFilesFromMessage(message: Message) {
   return files;
 }
 
+const RENDER_UI_TOOLS = new Set(["render_ui", "render_html"]);
+
 export function hasRenderUI(message: Message) {
   return (
     message.type === "ai" &&
     (message.tool_calls ?? []).length === 1 &&
-    message.tool_calls![0]!.name === "render_ui"
+    RENDER_UI_TOOLS.has(message.tool_calls![0]!.name)
   );
 }
 
