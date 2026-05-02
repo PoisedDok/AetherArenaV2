@@ -1,11 +1,17 @@
 """Tests for the panel_actions Gateway router."""
 
 import asyncio
-import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# SubagentStatus is provided by conftest as a real Enum inside the executor mock.
+# Import it through the mock so the router and tests share the same object.
+from aether.subagents.executor import SubagentStatus
 
 import app.gateway.routers.panel_actions as panel_actions_router
 from app.gateway.routers.panel_actions import (
@@ -14,7 +20,20 @@ from app.gateway.routers.panel_actions import (
     _extract_steps,
     _persist_result,
 )
-from aether.subagents.executor import SubagentResult, SubagentStatus
+
+
+# Minimal SubagentResult dataclass for test fixtures (real class not importable
+# from the mocked executor module).
+@dataclass
+class SubagentResult:
+    task_id: str
+    trace_id: str
+    status: SubagentStatus
+    result: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    ai_messages: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

@@ -186,7 +186,7 @@ async def start_panel_action(thread_id: str, request: PanelActionRequest) -> dic
     )
 
     # Get tools — no MCP, no task nesting
-    from aether.tools.builtins.tool_registry import get_available_tools
+    from aether.tools.tools import get_available_tools
     tools = get_available_tools(include_mcp=False, subagent_enabled=False)
 
     task_id = str(uuid.uuid4())
