@@ -8,6 +8,13 @@ export function getBackendBaseURL() {
   }
 }
 
+export function getUiTrustedOrigins(): string[] {
+  const raw = process.env.NEXT_PUBLIC_UI_TRUSTED_ORIGINS ?? "";
+  const extra = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const current = typeof window !== "undefined" ? window.location.origin : "";
+  return current ? [current, ...extra] : extra;
+}
+
 export function getLangGraphBaseURL(isMock?: boolean) {
   if (env.NEXT_PUBLIC_LANGGRAPH_BASE_URL) {
     return env.NEXT_PUBLIC_LANGGRAPH_BASE_URL;

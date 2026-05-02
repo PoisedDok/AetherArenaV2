@@ -1,10 +1,11 @@
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Conversation,
   ConversationContent,
 } from "@/components/ai-elements/conversation";
+import { InlineApp } from "@/components/ai-elements/inline-app";
 import { useCompactContext } from "@/core/compact/context";
 import { useI18n } from "@/core/i18n/hooks";
 import {
@@ -22,7 +23,6 @@ import { useUpdateSubtask } from "@/core/tasks/context";
 import type { AgentThreadState } from "@/core/threads";
 import { cn } from "@/lib/utils";
 
-import { InlineApp } from "@/components/ai-elements/inline-app";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
@@ -265,18 +265,43 @@ export function MessageList({
             }
 
             if (group.type === "assistant:inline-ui") {
-              const aiMsg = group.messages[0];
-              if (aiMsg?.type !== "ai") return null;
+              const aiMsg = group.messages.find((m) => m.type === "ai");
+              if (!aiMsg || aiMsg.type !== "ai") return null;
               const toolCall = aiMsg.tool_calls?.[0];
               if (!toolCall) return null;
-              const url = toolCall.args?.url as string | undefined;
               const title = toolCall.args?.title as string | undefined;
-              if (!url) return null;
-              return (
-                <div key={group.id} className="w-full">
-                  <InlineApp url={url} title={title} />
-                </div>
-              );
+
+              if (toolCall.name === "render_ui") {
+                const url = toolCall.args?.url as string | undefined;
+                if (!url) return null;
+                const isArtifact = url.startsWith("/api/threads/");
+                return (
+                  <div key={group.id} className="w-full">
+                    <InlineApp
+                      mode="url"
+                      url={url}
+                      title={title}
+                      downloadUrl={isArtifact ? url : undefined}
+                    />
+                  </div>
+                );
+              }
+
+              if (toolCall.name === "render_html") {
+                const toolMsg = group.messages.find((m) => m.type === "tool");
+                const result = toolMsg ? extractTextFromMessage(toolMsg) : "";
+                const artifactUrl =
+                  result.startsWith("/") || result.startsWith("https://")
+                    ? result.trim()
+                    : undefined;
+                return (
+                  <div key={group.id} className="w-full">
+                    <RenderHtmlPanel artifactUrl={artifactUrl} title={title} panelId={aiMsg.id ?? group.id ?? "panel"} />
+                  </div>
+                );
+              }
+
+              return null;
             }
 
             return (
@@ -295,5 +320,42 @@ export function MessageList({
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>
     </Conversation>
+  );
+}
+
+function RenderHtmlPanel({
+  artifactUrl,
+  title,
+  panelId,
+}: {
+  artifactUrl: string | undefined;
+  title: string | undefined;
+  panelId: string;
+}) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!artifactUrl) return;
+    fetch(artifactUrl)
+      .then((r) => r.text())
+      .then(setHtml)
+      .catch(() => null);
+  }, [artifactUrl]);
+
+  if (!html) return null;
+
+  return (
+    <InlineApp
+      mode="html"
+      html={html}
+      title={title}
+      panelId={panelId}
+      downloadUrl={artifactUrl}
+      onAction={(msg, sendToPanel) => {
+        // Phase 3 stub — action handling not yet wired
+        console.warn("[Phase 3 stub] action not wired:", msg.payload.name);
+        void sendToPanel;
+      }}
+    />
   );
 }

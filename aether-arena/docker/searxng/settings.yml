@@ -29,16 +29,16 @@ outgoing:
 engines:
   # ── WORKING ─────────────────────────────────────────────────────────────────
 
-  # General web search — Bing works reliably without bot blocks
-  - name: bing
-    engine: bing
-    shortcut: b
+  # Yahoo — reliable for financial, news, and general queries
+  - name: yahoo
+    engine: yahoo
+    shortcut: yh
     disabled: false
 
-  # News — Bing News is reliable
-  - name: bing news
-    engine: bing news
-    shortcut: bn
+  # Yandex — reliable for general and financial queries from container
+  - name: yandex
+    engine: yandex
+    shortcut: yn
     disabled: false
 
   # Wikipedia — always reliable, great for factual lookups
@@ -86,6 +86,18 @@ engines:
 
   # ── BLOCKED / UNRELIABLE ────────────────────────────────────────────────────
 
+  # Bing — returns bot-detection fallback content for financial/non-tech queries
+  # (serves random trending content instead of query-matched results)
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: true
+
+  - name: bing news
+    engine: bing news
+    shortcut: bn
+    disabled: true
+
   # Google — 403 bot detection, consistently blocked
   - name: google
     engine: google
@@ -119,7 +131,7 @@ engines:
     shortcut: br
     disabled: true
 
-  # Qwant — unreliable
+  # Qwant — access denied from container
   - name: qwant
     engine: qwant
     shortcut: qw
