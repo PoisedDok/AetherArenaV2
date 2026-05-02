@@ -14,6 +14,7 @@ from app.gateway.routers import (
     mcp,
     memory,
     models,
+    panel_actions,
     providers,
     skills,
     suggestions,
@@ -184,6 +185,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
+
+    # Panel Actions API — start/poll/cancel subagent actions from inline HTML panels
+    app.include_router(panel_actions.router)
 
     # Compact API — thread-scoped operations and config
     app.include_router(compact.router)

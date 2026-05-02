@@ -52,6 +52,8 @@ export function InlineApp({
       if (!d || typeof d !== "object") return;
 
       if (d.method === "ui/notifications/sandbox-proxy-ready") {
+        // Guard against cross-panel injection: only handle events for this panel's proxy.
+        if (d.params?.panelId !== panelId) return;
         setReady(true);
         proxyRef.current?.contentWindow?.postMessage(
           { method: "ui/notifications/sandbox-resource-ready", params: { html } },
