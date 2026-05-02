@@ -392,7 +392,13 @@ async def _obscura_fetch(
                 )
             return markdown, None
     except asyncio.TimeoutError:
-        return None, f"Error: Timed out after {timeout}s fetching {url} via Obscura."
+        return None, (
+            f"Error: Timed out after {timeout}s fetching {url} via Obscura. "
+            "The page is too slow, requires authentication, or actively blocks automated access. "
+            "Try: (1) web_search for cached/summarized content about this topic, "
+            "(2) web_extract with a specific CSS selector on a lighter page, "
+            "(3) bash with curl for plain JSON APIs that don't need JS rendering."
+        )
     except RuntimeError as exc:
         return None, f"Error: {exc}"
     except OSError as exc:
@@ -402,6 +408,26 @@ async def _obscura_fetch(
         )
     except Exception as exc:
         return None, f"Error: Obscura connection failed — {exc}"
+
+
+def _http_fallback_fetch(url: str, timeout: int) -> tuple[str | None, str | None]:
+    """Plain HTTP fetch fallback (no JS rendering) via markitdown.
+
+    Used when Obscura times out or is unavailable. Works for static pages,
+    RSS feeds, plain-text APIs, and sites that don't require JavaScript.
+    Returns (markdown, None) or (None, error).
+    """
+    try:
+        from aether.community.searxng.tools import _fetch_html, _html_to_md as _searxng_html_to_md
+        html, err = _fetch_html(url, timeout)
+        if err:
+            return None, err
+        if not html or not html.strip():
+            return None, f"Error: Page returned no content for {url}."
+        md = _searxng_html_to_md(html)
+        return (md if md and md.strip() else None), (None if md and md.strip() else f"Error: No extractable text at {url}.")
+    except Exception as exc:
+        return None, f"HTTP fallback failed: {exc}"
 
 
 def _run_web_fetch(url: str, workspace: str, obscura_url: str, timeout: int) -> str:
@@ -420,6 +446,18 @@ def _run_web_fetch(url: str, workspace: str, obscura_url: str, timeout: int) -> 
     markdown, fetch_err = asyncio.run(
         _obscura_fetch(url, obscura_url=obscura_url, timeout=timeout)
     )
+
+    # 3. HTTP fallback when Obscura times out (static pages, JSON APIs, slow-rendering sites)
+    if fetch_err and fetch_err.startswith("Error: Timed out"):
+        logger.info("Obscura timed out for %s, trying plain HTTP fallback", url)
+        fallback_md, fallback_err = _http_fallback_fetch(url, min(timeout, 10))
+        if fallback_md and fallback_md.strip():
+            markdown = fallback_md
+            fetch_err = None  # fallback succeeded
+        else:
+            # Return original Obscura timeout error (more informative)
+            return fetch_err
+
     if fetch_err:
         return fetch_err
     if not markdown or not markdown.strip():
